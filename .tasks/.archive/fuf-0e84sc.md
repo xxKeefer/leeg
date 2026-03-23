@@ -2,8 +2,9 @@
 id: fuf-0e84sc
 title: eslint + project structure
 type: chore
-status: todo
+status: done
 created: '2026-03-23'
+flag: completed
 parent: fuf-0e40wp
 priority: 3
 ---
@@ -14,6 +15,6 @@ Install @nuxt/eslint-config, configure linting for TS and Vue files. Create dire
 
 ## Acceptance Criteria
 
-- [ ] pnpm lint runs without errors
-- [ ] Directory structure matches the spike estimated shape
-- [ ] ESLint catches type errors in .ts and .vue files
+- [x] pnpm lint runs without errors
+- [x] Directory structure matches the spike estimated shape
+- [x] ESLint catches type errors in .ts and .vue files

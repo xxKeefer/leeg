@@ -2,8 +2,9 @@
 id: fuf-0e80zm
 title: initialise nuxt 3 + tailwind css 4
 type: chore
-status: todo
+status: done
 created: '2026-03-23'
+flag: completed
 parent: fuf-0e40wp
 priority: 5
 ---
@@ -14,7 +15,7 @@ Bootstrap the Nuxt 3 app with TypeScript strict mode and Tailwind CSS 4. Verify 
 
 ## Acceptance Criteria
 
-- [ ] pnpm dev starts Nuxt dev server without errors
-- [ ] TypeScript strict mode enabled
-- [ ] Tailwind CSS 4 utility classes render correctly on a placeholder page
-- [ ] Build (pnpm build) succeeds
+- [x] pnpm dev starts Nuxt dev server without errors
+- [x] TypeScript strict mode enabled
+- [x] Tailwind CSS 4 utility classes render correctly on a placeholder page
+- [x] Build (pnpm build) succeeds
