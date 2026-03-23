@@ -3,9 +3,14 @@ import { mountSuspended } from '@nuxt/test-utils/runtime'
 import App from './app.vue'
 
 describe('app', () => {
-  it('renders the placeholder page', async () => {
+  it('renders the nav with app name', async () => {
     const wrapper = await mountSuspended(App)
     expect(wrapper.text()).toContain('leeg')
-    expect(wrapper.text()).toContain('Pokemon Showdown League Tracker')
+  })
+
+  it('has navigation links', async () => {
+    const wrapper = await mountSuspended(App)
+    expect(wrapper.text()).toContain('Trainers')
+    expect(wrapper.text()).toContain('Seasons')
   })
 })

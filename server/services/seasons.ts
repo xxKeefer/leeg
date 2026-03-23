@@ -8,6 +8,10 @@ export function createSeasonService(db: Db) {
       return db.insert(seasons).values({ name: data.name }).returning().get()
     },
 
+    list() {
+      return db.select().from(seasons).all()
+    },
+
     addToRoster(data: { seasonId: number; trainerId: number; species: string }) {
       const existing = db.select().from(pokemon)
         .where(and(

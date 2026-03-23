@@ -22,6 +22,16 @@ describe('seasonService', () => {
     })
   })
 
+  describe('list', () => {
+    it('returns all seasons', () => {
+      seasonService.create({ name: 'Season 1' })
+      seasonService.create({ name: 'Season 2' })
+      const all = seasonService.list()
+      expect(all).toHaveLength(2)
+      expect(all.map(s => s.name)).toEqual(['Season 1', 'Season 2'])
+    })
+  })
+
   describe('roster', () => {
     let seasonId: number
     let trainerId: number

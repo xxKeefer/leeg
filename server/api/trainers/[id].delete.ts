@@ -7,9 +7,17 @@ export default defineEventHandler((event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid id' })
   }
   const service = createTrainerService(db)
-  const removed = service.remove(id)
-  if (!removed) {
-    throw createError({ statusCode: 404, statusMessage: 'Trainer not found' })
+  try {
+    const removed = service.remove(id)
+    if (!removed) {
+      throw createError({ statusCode: 404, statusMessage: 'Trainer not found' })
+    }
+    return { success: true }
   }
-  return { success: true }
+  catch (error) {
+    if (error instanceof Error && /roster/i.test(error.message)) {
+      throw createError({ statusCode: 409, statusMessage: error.message })
+    }
+    throw error
+  }
 })

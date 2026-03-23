@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { trainers } from '../db/schema'
+import { trainers, pokemon } from '../db/schema'
 import type { Db } from '../db/types'
 
 export function createTrainerService(db: Db) {
@@ -27,6 +27,10 @@ export function createTrainerService(db: Db) {
     },
 
     remove(id: number) {
+      const rosterEntries = db.select().from(pokemon).where(eq(pokemon.trainerId, id)).all()
+      if (rosterEntries.length > 0) {
+        throw new Error('Cannot delete trainer with roster entries')
+      }
       const result = db.delete(trainers).where(eq(trainers.id, id)).run()
       return result.changes > 0
     },

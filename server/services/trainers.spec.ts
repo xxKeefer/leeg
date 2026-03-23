@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestDb, type Db } from '../db/test-utils'
 import { createTrainerService } from './trainers'
+import { createSeasonService } from './seasons'
 
 describe('trainerService', () => {
   let db: Db
@@ -73,6 +74,14 @@ describe('trainerService', () => {
 
     it('returns false for missing id', () => {
       expect(service.remove(999)).toBe(false)
+    })
+
+    it('throws when trainer has roster entries', () => {
+      const trainer = service.create({ name: 'Ash' })
+      const seasonService = createSeasonService(db)
+      const season = seasonService.create({ name: 'Season 1' })
+      seasonService.addToRoster({ seasonId: season.id, trainerId: trainer.id, species: 'Pikachu' })
+      expect(() => service.remove(trainer.id)).toThrow(/roster/i)
     })
   })
 })

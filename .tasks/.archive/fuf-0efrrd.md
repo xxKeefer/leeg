@@ -2,8 +2,9 @@
 id: fuf-0efrrd
 title: trainer & roster management ui
 type: feat
-status: todo
+status: done
 created: '2026-03-23'
+flag: completed
 parent: fuf-0e46gu
 priority: 3
 ---
@@ -14,8 +15,8 @@ Vue pages for trainer list, trainer create/edit, season creation, and roster ass
 
 ## Acceptance Criteria
 
-- [ ] Trainer list page shows all trainers
-- [ ] Admin can add and edit trainers via a form
-- [ ] Admin can create a new season
-- [ ] Admin can assign Pokemon to trainers (up to 5)
-- [ ] Roster view shows each trainer's Pokemon
+- [x] Trainer list page shows all trainers
+- [x] Admin can add and edit trainers via a form
+- [x] Admin can create a new season
+- [x] Admin can assign Pokemon to trainers (up to 5)
+- [x] Roster view shows each trainer's Pokemon
