@@ -1,20 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { eq } from 'drizzle-orm'
 import * as schema from './schema'
-
-function createTestDb() {
-  const sqlite = new Database(':memory:')
-  sqlite.pragma('foreign_keys = ON')
-  const db = drizzle(sqlite, { schema })
-  migrate(db, { migrationsFolder: './server/db/migrations' })
-  return db
-}
+import { createTestDb, type Db } from './test-utils'
 
 describe('schema', () => {
-  let db: ReturnType<typeof createTestDb>
+  let db: Db
 
   beforeEach(() => {
     db = createTestDb()
