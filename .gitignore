@@ -23,3 +23,8 @@ logs
 .env.*
 !.env.example
 .direnv
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
