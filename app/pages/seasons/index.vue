@@ -137,13 +137,10 @@ function trainerName(trainerId: number): string {
               {{ t.name }} ({{ rosterForTrainer(t.id).length }}/{{ MAX_ROSTER_SIZE }})
             </option>
           </select>
-          <input
+          <PokemonAutocomplete
             v-model="assignSpecies"
-            type="text"
-            placeholder="Pokemon species"
-            class="bg-gray-700 px-3 py-2 rounded flex-1"
             :disabled="selectedTrainerAtLimit"
-          >
+          />
           <button
             type="submit"
             class="px-4 py-2 rounded"

@@ -2,8 +2,9 @@
 id: fuf-0ht284
 title: pokemon species from pokeapi
 type: feat
-status: todo
+status: done
 created: '2026-03-23'
+flag: completed
 parent: fuf-0e46gu
 priority: 3
 ---
