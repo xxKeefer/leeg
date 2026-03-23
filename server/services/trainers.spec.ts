@@ -76,11 +76,11 @@ describe('trainerService', () => {
       expect(service.remove(999)).toBe(false)
     })
 
-    it('throws when trainer has roster entries', () => {
+    it('throws when trainer has roster entries', async () => {
       const trainer = service.create({ name: 'Ash' })
       const seasonService = createSeasonService(db)
       const season = seasonService.create({ name: 'Season 1' })
-      seasonService.addToRoster({ seasonId: season.id, trainerId: trainer.id, species: 'Pikachu' })
+      await seasonService.addToRoster({ seasonId: season.id, trainerId: trainer.id, species: 'Pikachu' })
       expect(() => service.remove(trainer.id)).toThrow(/roster/i)
     })
   })

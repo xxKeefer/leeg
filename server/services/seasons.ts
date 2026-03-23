@@ -1,8 +1,11 @@
 import { eq, and } from 'drizzle-orm'
 import { seasons, pokemon } from '../db/schema'
 import type { Db } from '../db/types'
+import type { createPokeApiService } from './pokeapi'
 
-export function createSeasonService(db: Db) {
+type PokeApiService = ReturnType<typeof createPokeApiService>
+
+export function createSeasonService(db: Db, pokeApi?: PokeApiService) {
   return {
     create(data: { name: string }) {
       return db.insert(seasons).values({ name: data.name }).returning().get()
@@ -12,7 +15,14 @@ export function createSeasonService(db: Db) {
       return db.select().from(seasons).all()
     },
 
-    addToRoster(data: { seasonId: number; trainerId: number; species: string }) {
+    async addToRoster(data: { seasonId: number; trainerId: number; species: string }) {
+      const normalised = data.species.toLowerCase().trim()
+
+      if (pokeApi) {
+        const valid = await pokeApi.isValidSpecies(normalised)
+        if (!valid) throw new Error(`Invalid Pokemon species: ${data.species}`)
+      }
+
       const existing = db.select().from(pokemon)
         .where(and(
           eq(pokemon.seasonId, data.seasonId),
@@ -25,7 +35,7 @@ export function createSeasonService(db: Db) {
       return db.insert(pokemon).values({
         seasonId: data.seasonId,
         trainerId: data.trainerId,
-        species: data.species,
+        species: normalised,
       }).returning().get()
     },
 

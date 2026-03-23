@@ -1,7 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createTestDb, type Db } from '../db/test-utils'
 import { createSeasonService } from './seasons'
 import { createTrainerService } from './trainers'
+import { createPokeApiService } from './pokeapi'
+
+const VALID_SPECIES = ['pikachu', 'charizard', 'blastoise', 'venusaur', 'gengar', 'mewtwo', 'starmie']
+
+function mockPokeApi() {
+  return createPokeApiService(
+    vi.fn().mockResolvedValue({
+      results: VALID_SPECIES.map(name => ({ name, url: '' })),
+    }),
+  )
+}
 
 describe('seasonService', () => {
   let db: Db
@@ -10,7 +21,7 @@ describe('seasonService', () => {
 
   beforeEach(() => {
     db = createTestDb()
-    seasonService = createSeasonService(db)
+    seasonService = createSeasonService(db, mockPokeApi())
     trainerService = createTrainerService(db)
   })
 
@@ -33,10 +44,10 @@ describe('seasonService', () => {
   })
 
   describe('remove', () => {
-    it('deletes a season and its roster entries', () => {
+    it('deletes a season and its roster entries', async () => {
       const season = seasonService.create({ name: 'Season 1' })
       const trainer = trainerService.create({ name: 'Ash' })
-      seasonService.addToRoster({ seasonId: season.id, trainerId: trainer.id, species: 'Pikachu' })
+      await seasonService.addToRoster({ seasonId: season.id, trainerId: trainer.id, species: 'pikachu' })
 
       const removed = seasonService.remove(season.id)
       expect(removed).toBe(true)
@@ -60,40 +71,51 @@ describe('seasonService', () => {
       seasonId = season.id
     })
 
-    it('assigns a pokemon to a trainer', () => {
-      const entry = seasonService.addToRoster({
+    it('assigns a pokemon to a trainer', async () => {
+      const entry = await seasonService.addToRoster({
         seasonId,
         trainerId,
         species: 'Pikachu',
       })
-      expect(entry.species).toBe('Pikachu')
+      expect(entry.species).toBe('pikachu')
       expect(entry.trainerId).toBe(trainerId)
     })
 
-    it('enforces max 5 pokemon per trainer per season', () => {
-      const species = ['Pikachu', 'Charizard', 'Blastoise', 'Venusaur', 'Gengar']
-      for (const s of species) {
-        seasonService.addToRoster({ seasonId, trainerId, species: s })
-      }
-      expect(() =>
-        seasonService.addToRoster({ seasonId, trainerId, species: 'Mewtwo' }),
-      ).toThrow(/5/)
+    it('normalises species to lowercase', async () => {
+      const entry = await seasonService.addToRoster({ seasonId, trainerId, species: 'CHARIZARD' })
+      expect(entry.species).toBe('charizard')
     })
 
-    it('returns all trainers with their pokemon for a season', () => {
+    it('rejects invalid species', async () => {
+      await expect(
+        seasonService.addToRoster({ seasonId, trainerId, species: 'fakemon' }),
+      ).rejects.toThrow(/invalid/i)
+    })
+
+    it('enforces max 5 pokemon per trainer per season', async () => {
+      const species = ['pikachu', 'charizard', 'blastoise', 'venusaur', 'gengar']
+      for (const s of species) {
+        await seasonService.addToRoster({ seasonId, trainerId, species: s })
+      }
+      await expect(
+        seasonService.addToRoster({ seasonId, trainerId, species: 'mewtwo' }),
+      ).rejects.toThrow(/5/)
+    })
+
+    it('returns all trainers with their pokemon for a season', async () => {
       const misty = trainerService.create({ name: 'Misty' })
-      seasonService.addToRoster({ seasonId, trainerId, species: 'Pikachu' })
-      seasonService.addToRoster({ seasonId, trainerId: misty.id, species: 'Starmie' })
+      await seasonService.addToRoster({ seasonId, trainerId, species: 'pikachu' })
+      await seasonService.addToRoster({ seasonId, trainerId: misty.id, species: 'starmie' })
 
       const rosters = seasonService.getRosters(seasonId)
       expect(rosters).toHaveLength(2)
       const ashRoster = rosters.find(r => r.trainerId === trainerId)
       expect(ashRoster?.pokemon).toHaveLength(1)
-      expect(ashRoster?.pokemon[0]!.species).toBe('Pikachu')
+      expect(ashRoster?.pokemon[0]!.species).toBe('pikachu')
     })
 
-    it('removes a pokemon from a roster', () => {
-      const entry = seasonService.addToRoster({ seasonId, trainerId, species: 'Pikachu' })
+    it('removes a pokemon from a roster', async () => {
+      const entry = await seasonService.addToRoster({ seasonId, trainerId, species: 'pikachu' })
       const removed = seasonService.removeFromRoster(entry.id)
       expect(removed).toBe(true)
 
