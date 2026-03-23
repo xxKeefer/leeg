@@ -32,6 +32,23 @@ describe('seasonService', () => {
     })
   })
 
+  describe('remove', () => {
+    it('deletes a season and its roster entries', () => {
+      const season = seasonService.create({ name: 'Season 1' })
+      const trainer = trainerService.create({ name: 'Ash' })
+      seasonService.addToRoster({ seasonId: season.id, trainerId: trainer.id, species: 'Pikachu' })
+
+      const removed = seasonService.remove(season.id)
+      expect(removed).toBe(true)
+      expect(seasonService.list()).toHaveLength(0)
+      expect(seasonService.getRosters(season.id)).toHaveLength(0)
+    })
+
+    it('returns false for missing id', () => {
+      expect(seasonService.remove(999)).toBe(false)
+    })
+  })
+
   describe('roster', () => {
     let seasonId: number
     let trainerId: number

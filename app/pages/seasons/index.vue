@@ -42,6 +42,15 @@ async function createSeason() {
   }
 }
 
+async function removeSeason(id: number) {
+  await $fetch(`/api/seasons/${id}`, { method: 'DELETE' })
+  if (selectedSeasonId.value === id) {
+    selectedSeasonId.value = null
+    rosters.value = []
+  }
+  await refreshSeasons()
+}
+
 async function loadRosters() {
   if (!selectedSeasonId.value) return
   rosters.value = await $fetch(`/api/seasons/${selectedSeasonId.value}/rosters`)
@@ -96,15 +105,22 @@ function trainerName(trainerId: number): string {
 
     <div v-if="seasons.length" class="mb-6">
       <div class="flex gap-2 flex-wrap">
-        <button
-          v-for="season in seasons"
-          :key="season.id"
-          class="px-3 py-1 rounded"
-          :class="selectedSeasonId === season.id ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'"
-          @click="selectedSeasonId = season.id; loadRosters()"
-        >
-          {{ season.name }}
-        </button>
+        <div v-for="season in seasons" :key="season.id" class="inline-flex items-center gap-1">
+          <button
+            class="px-3 py-1 rounded-l"
+            :class="selectedSeasonId === season.id ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'"
+            @click="selectedSeasonId = season.id; loadRosters()"
+          >
+            {{ season.name }}
+          </button>
+          <button
+            class="px-2 py-1 rounded-r text-red-400 hover:text-red-300"
+            :class="selectedSeasonId === season.id ? 'bg-blue-700' : 'bg-gray-700 hover:bg-gray-600'"
+            @click.stop="removeSeason(season.id)"
+          >
+            ×
+          </button>
+        </div>
       </div>
     </div>
 

@@ -45,5 +45,11 @@ export function createSeasonService(db: Db) {
       const result = db.delete(pokemon).where(eq(pokemon.id, pokemonId)).run()
       return result.changes > 0
     },
+
+    remove(id: number) {
+      db.delete(pokemon).where(eq(pokemon.seasonId, id)).run()
+      const result = db.delete(seasons).where(eq(seasons.id, id)).run()
+      return result.changes > 0
+    },
   }
 }
