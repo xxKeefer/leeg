@@ -71,6 +71,9 @@ const generateError = ref<string | null>(null);
 
 const expandedMatch = ref<string | null>(null);
 const gameInputs = ref<Record<string, { winner: string; team1Kos: number; team2Kos: number }>>({});
+const replayInputs = ref<Record<string, string>>({});
+const replaySubmitting = ref<Record<string, boolean>>({});
+const replayError = ref<Record<string, string>>({});
 
 function getGameInput(gameId: string) {
   if (!gameInputs.value[gameId]) {
@@ -192,6 +195,25 @@ async function submitGameResult(gameId: string, winner: string, team1Kos: number
     await Promise.all([fetchSchedule(), fetchStandings()]);
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to submit game result";
+  }
+}
+
+async function submitReplay(matchId: string, gameId: string, gameNumber: number) {
+  const url = replayInputs.value[gameId];
+  if (!url) return;
+  replaySubmitting.value[gameId] = true;
+  replayError.value[gameId] = "";
+  try {
+    await apiFetch(`/leagues/${route.params.id}/matches/${matchId}/games`, {
+      method: "POST",
+      body: JSON.stringify({ replayUrl: url, gameNumber }),
+    });
+    replayInputs.value[gameId] = "";
+    await Promise.all([fetchSchedule(), fetchStandings()]);
+  } catch (e) {
+    replayError.value[gameId] = e instanceof Error ? e.message : "Failed to submit replay";
+  } finally {
+    replaySubmitting.value[gameId] = false;
   }
 }
 
@@ -421,55 +443,79 @@ onMounted(fetchLeague);
                   <div
                     v-for="game in (match.games || []).sort((a: Game, b: Game) => a.gameNumber - b.gameNumber)"
                     :key="game.id"
-                    class="flex items-center gap-2 text-xs bg-gray-50 p-2 rounded"
+                    class="text-xs bg-gray-50 p-2 rounded space-y-1"
                   >
-                    <span class="font-medium w-16">Game {{ game.gameNumber }}</span>
-                    <template v-if="game.winner">
-                      <span class="text-green-600">
-                        {{ game.winner === 'team1' ? 'Team 1' : game.winner === 'team2' ? 'Team 2' : 'Draw' }}
-                      </span>
-                      <span class="text-gray-400">KOs: {{ game.team1Kos }}-{{ game.team2Kos }}</span>
-                      <button
-                        class="ml-auto text-blue-500 hover:underline"
-                        @click="submitGameResult(game.id, '', 0, 0).then(() => { /* clear handled by refetch */ })"
-                      >
-                        Edit
-                      </button>
-                    </template>
-                    <template v-else>
-                      <select
-                        v-model="getGameInput(game.id).winner"
-                        class="border rounded px-1 py-0.5"
-                      >
-                        <option value="">Winner</option>
-                        <option value="team1">Team 1</option>
-                        <option value="team2">Team 2</option>
-                        <option value="draw">Draw</option>
-                      </select>
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium w-16">Game {{ game.gameNumber }}</span>
+                      <template v-if="game.winner">
+                        <span class="text-green-600">
+                          {{ game.winner === 'team1' ? 'Team 1' : game.winner === 'team2' ? 'Team 2' : 'Draw' }}
+                        </span>
+                        <span class="text-gray-400">KOs: {{ game.team1Kos }}-{{ game.team2Kos }}</span>
+                        <a
+                          v-if="game.replayUrl"
+                          :href="game.replayUrl"
+                          target="_blank"
+                          class="text-blue-500 hover:underline"
+                        >Replay</a>
+                        <button
+                          class="ml-auto text-blue-500 hover:underline"
+                          @click="submitGameResult(game.id, '', 0, 0).then(() => { /* clear handled by refetch */ })"
+                        >
+                          Edit
+                        </button>
+                      </template>
+                      <template v-else>
+                        <select
+                          v-model="getGameInput(game.id).winner"
+                          class="border rounded px-1 py-0.5"
+                        >
+                          <option value="">Winner</option>
+                          <option value="team1">Team 1</option>
+                          <option value="team2">Team 2</option>
+                          <option value="draw">Draw</option>
+                        </select>
+                        <input
+                          v-model.number="getGameInput(game.id).team1Kos"
+                          type="number"
+                          min="0"
+                          max="6"
+                          placeholder="T1 KOs"
+                          class="border rounded px-1 py-0.5 w-16"
+                        />
+                        <input
+                          v-model.number="getGameInput(game.id).team2Kos"
+                          type="number"
+                          min="0"
+                          max="6"
+                          placeholder="T2 KOs"
+                          class="border rounded px-1 py-0.5 w-16"
+                        />
+                        <button
+                          class="px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600"
+                          :disabled="!getGameInput(game.id).winner"
+                          @click="submitGameResult(game.id, getGameInput(game.id).winner, getGameInput(game.id).team1Kos, getGameInput(game.id).team2Kos)"
+                        >
+                          Save
+                        </button>
+                      </template>
+                    </div>
+                    <div v-if="!game.winner" class="flex items-center gap-2 pt-1">
                       <input
-                        v-model.number="getGameInput(game.id).team1Kos"
-                        type="number"
-                        min="0"
-                        max="6"
-                        placeholder="T1 KOs"
-                        class="border rounded px-1 py-0.5 w-16"
-                      />
-                      <input
-                        v-model.number="getGameInput(game.id).team2Kos"
-                        type="number"
-                        min="0"
-                        max="6"
-                        placeholder="T2 KOs"
-                        class="border rounded px-1 py-0.5 w-16"
+                        v-model="replayInputs[game.id]"
+                        type="url"
+                        placeholder="Paste replay URL..."
+                        class="border rounded px-1 py-0.5 flex-1"
                       />
                       <button
-                        class="px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600"
-                        :disabled="!getGameInput(game.id).winner"
-                        @click="submitGameResult(game.id, getGameInput(game.id).winner, getGameInput(game.id).team1Kos, getGameInput(game.id).team2Kos)"
+                        class="px-2 py-0.5 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                        :disabled="!replayInputs[game.id] || replaySubmitting[game.id]"
+                        @click="submitReplay(match.id, game.id, game.gameNumber)"
                       >
-                        Save
+                        {{ replaySubmitting[game.id] ? '...' : 'Parse' }}
                       </button>
-                    </template>
+                    </div>
+                    <p v-if="replayError[game.id]" class="text-red-600 text-xs">{{ replayError[game.id] }}</p>
                   </div>
 
                   <!-- Manual Override -->

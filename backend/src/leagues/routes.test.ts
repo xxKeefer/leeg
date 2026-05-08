@@ -3,10 +3,15 @@ import { Hono } from "hono";
 import { leagueRoutes } from "./routes.js";
 import type { AuthVariables } from "../types.js";
 
-const { mockReturning, mockSet, mockUpdateWhere } = vi.hoisted(() => ({
+const { mockReturning, mockSet, mockUpdateWhere, mockFetchReplay } = vi.hoisted(() => ({
   mockReturning: vi.fn(),
   mockUpdateWhere: vi.fn(),
   mockSet: vi.fn(),
+  mockFetchReplay: vi.fn(),
+}));
+
+vi.mock("../parser/fetch-replay.js", () => ({
+  fetchReplayProtocol: mockFetchReplay,
 }));
 
 vi.mock("../db/index.js", () => ({
@@ -642,6 +647,208 @@ describe("league routes", () => {
       const res = await app.request("/leagues/league-1/standings");
 
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe("POST /leagues/:id/matches/:mid/games", () => {
+    it("submits replay URL and auto-populates game result", async () => {
+      const protocol = "|player|p1|Alice|\n|player|p2|Bob|\n|faint|p2a: Pikachu\n|faint|p2a: Charizard\n|win|Alice";
+      mockFetchReplay.mockResolvedValue(protocol);
+
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "m-1",
+        roundId: "r-1",
+        team1Player1: "p-1",
+        team1Player2: "p-2",
+        team2Player1: "p-3",
+        team2Player2: "p-4",
+      });
+      (db.query.games.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "g-1",
+        matchId: "m-1",
+        gameNumber: 1,
+      });
+      const updatedGame = {
+        id: "g-1",
+        matchId: "m-1",
+        gameNumber: 1,
+        replayUrl: "https://replay.pokemonshowdown.com/gen9doublesou-12345",
+        protocol,
+        winner: "team1",
+        team1Kos: 2,
+        team2Kos: 0,
+      };
+      mockReturning.mockResolvedValue([updatedGame]);
+      (db.query.games.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { winner: "team1", team1Kos: 2, team2Kos: 0 },
+      ]);
+
+      const res = await app.request("/leagues/league-1/matches/m-1/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          replayUrl: "https://replay.pokemonshowdown.com/gen9doublesou-12345",
+          gameNumber: 1,
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.game.winner).toBe("team1");
+      expect(body.game.team1Kos).toBe(2);
+      expect(body.game.team2Kos).toBe(0);
+      expect(body.game.replayUrl).toBe("https://replay.pokemonshowdown.com/gen9doublesou-12345");
+    });
+
+    it("returns 400 for missing replayUrl", async () => {
+      const res = await app.request("/leagues/league-1/matches/m-1/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameNumber: 1 }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 400 for missing gameNumber", async () => {
+      const res = await app.request("/leagues/league-1/matches/m-1/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ replayUrl: "https://replay.pokemonshowdown.com/test-123" }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 404 for non-existent league", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/matches/m-1/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          replayUrl: "https://replay.pokemonshowdown.com/test-123",
+          gameNumber: 1,
+        }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for non-existent match", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/matches/m-1/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          replayUrl: "https://replay.pokemonshowdown.com/test-123",
+          gameNumber: 1,
+        }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for non-existent game", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "m-1",
+        roundId: "r-1",
+      });
+      (db.query.games.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/matches/m-1/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          replayUrl: "https://replay.pokemonshowdown.com/test-123",
+          gameNumber: 1,
+        }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 502 when replay fetch fails", async () => {
+      mockFetchReplay.mockRejectedValue(new Error("Failed to fetch replay: 404"));
+
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "m-1",
+        roundId: "r-1",
+      });
+      (db.query.games.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "g-1",
+        matchId: "m-1",
+        gameNumber: 1,
+      });
+
+      const res = await app.request("/leagues/league-1/matches/m-1/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          replayUrl: "https://replay.pokemonshowdown.com/test-123",
+          gameNumber: 1,
+        }),
+      });
+
+      expect(res.status).toBe(502);
+      const body = await res.json();
+      expect(body.error).toMatch(/fetch/i);
+    });
+
+    it("auto-derives match result when enough games recorded", async () => {
+      const protocol = "|player|p1|Alice|\n|player|p2|Bob|\n|win|Alice";
+      mockFetchReplay.mockResolvedValue(protocol);
+
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "m-1",
+        roundId: "r-1",
+      });
+      (db.query.games.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "g-2",
+        matchId: "m-1",
+        gameNumber: 2,
+      });
+      mockReturning.mockResolvedValue([
+        { id: "g-2", matchId: "m-1", gameNumber: 2, winner: "team1", team1Kos: 0, team2Kos: 0 },
+      ]);
+      (db.query.games.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { winner: "team1", team1Kos: 3, team2Kos: 1 },
+        { winner: "team1", team1Kos: 0, team2Kos: 0 },
+      ]);
+
+      const res = await app.request("/leagues/league-1/matches/m-1/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          replayUrl: "https://replay.pokemonshowdown.com/test-123",
+          gameNumber: 2,
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.matchResult).toBe("team1");
     });
   });
 });

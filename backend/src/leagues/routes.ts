@@ -5,6 +5,8 @@ import { leagues, players, rounds, matches, games } from "../db/schema.js";
 import { generatePartnershipSchedule } from "../scheduler/round-robin.js";
 import { matchTeams } from "../scheduler/opponent-matching.js";
 import { deriveMatchResult, computeStandings, type MatchData } from "../standings/compute.js";
+import { fetchReplayProtocol } from "../parser/fetch-replay.js";
+import { parseProtocol } from "../parser/protocol.js";
 import type { AuthVariables } from "../types.js";
 
 export const leagueRoutes = new Hono<{ Variables: AuthVariables }>();
@@ -322,6 +324,82 @@ leagueRoutes.patch("/:id/matches/:mid", async (c) => {
     .returning();
 
   return c.json({ match: updated });
+});
+
+leagueRoutes.post("/:id/matches/:mid/games", async (c) => {
+  const { id, mid } = c.req.param();
+  const body = await c.req.json();
+  const { replayUrl, gameNumber } = body;
+
+  if (!replayUrl || gameNumber === undefined) {
+    return c.json({ error: "replayUrl and gameNumber are required" }, 400);
+  }
+
+  const league = await db.query.leagues.findFirst({
+    where: eq(leagues.id, id),
+  });
+
+  if (!league) {
+    return c.json({ error: "League not found" }, 404);
+  }
+
+  const match = await db.query.matches.findFirst({
+    where: eq(matches.id, mid),
+  });
+
+  if (!match) {
+    return c.json({ error: "Match not found" }, 404);
+  }
+
+  const game = await db.query.games.findFirst({
+    where: and(eq(games.matchId, mid), eq(games.gameNumber, gameNumber)),
+  });
+
+  if (!game) {
+    return c.json({ error: "Game not found" }, 404);
+  }
+
+  let protocol: string;
+  try {
+    protocol = await fetchReplayProtocol(replayUrl);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to fetch replay";
+    return c.json({ error: message }, 502);
+  }
+
+  const parsed = parseProtocol(protocol);
+
+  const winner = parsed.winner === "draw" ? "draw" : parsed.winner === "p1" ? "team1" : "team2";
+
+  const [updated] = await db
+    .update(games)
+    .set({
+      replayUrl,
+      protocol,
+      winner,
+      team1Kos: parsed.p1Kos,
+      team2Kos: parsed.p2Kos,
+    })
+    .where(eq(games.id, game.id))
+    .returning();
+
+  const matchGames = await db.query.games.findMany({
+    where: eq(games.matchId, game.matchId),
+  });
+
+  const derived = deriveMatchResult(
+    matchGames.map((g) => ({
+      winner: g.winner as "team1" | "team2" | "draw" | null,
+      team1Kos: g.team1Kos,
+      team2Kos: g.team2Kos,
+    })),
+  );
+
+  if (derived) {
+    await db.update(matches).set({ result: derived }).where(eq(matches.id, game.matchId));
+  }
+
+  return c.json({ game: updated, matchResult: derived });
 });
 
 leagueRoutes.get("/:id/standings", async (c) => {
