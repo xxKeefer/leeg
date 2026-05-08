@@ -17,7 +17,7 @@
 //   "scripts": { "sandcastle": "npx tsx .sandcastle/main.ts" }
 
 import * as sandcastle from "@ai-hero/sandcastle";
-import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
+import { podman } from "@ai-hero/sandcastle/sandboxes/podman";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -30,7 +30,7 @@ const MAX_ITERATIONS = 10;
 // Hooks run inside the sandbox before the agent starts each iteration.
 // npm install ensures the sandbox always has fresh dependencies.
 const hooks = {
-  sandbox: { onSandboxReady: [{ command: "pnpm install" }] },
+  sandbox: { onSandboxReady: [{ command: "CI=true pnpm install" }] },
 };
 
 const copyToWorktree = ["node_modules", "frontend/node_modules", "backend/node_modules"];
@@ -55,7 +55,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   const implement = await sandcastle.run({
     hooks,
     copyToWorktree,
-    sandbox: docker(),
+    sandbox: podman(),
     branchStrategy: { type: "merge-to-head" },
     name: "implementer",
     maxIterations: 100,
@@ -84,7 +84,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   await sandcastle.run({
     hooks,
     copyToWorktree,
-    sandbox: docker(),
+    sandbox: podman(),
     branchStrategy: { type: "branch", branch },
     name: "reviewer",
     maxIterations: 1,
