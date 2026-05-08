@@ -3,9 +3,10 @@ import { Hono } from "hono";
 import { leagueRoutes } from "./routes.js";
 import type { AuthVariables } from "../types.js";
 
-const { mockReturning, mockSet } = vi.hoisted(() => ({
+const { mockReturning, mockSet, mockUpdateWhere } = vi.hoisted(() => ({
   mockReturning: vi.fn(),
-  mockSet: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+  mockUpdateWhere: vi.fn(),
+  mockSet: vi.fn(),
 }));
 
 vi.mock("../db/index.js", () => ({
@@ -36,6 +37,13 @@ vi.mock("../db/index.js", () => ({
         findMany: vi.fn(),
         findFirst: vi.fn(),
       },
+      matches: {
+        findFirst: vi.fn(),
+      },
+      games: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
+      },
     },
   },
 }));
@@ -58,7 +66,8 @@ describe("league routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     app = makeApp();
-    mockSet.mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+    mockUpdateWhere.mockReturnValue({ returning: mockReturning });
+    mockSet.mockReturnValue({ where: mockUpdateWhere });
   });
 
   describe("POST /leagues", () => {
@@ -402,6 +411,235 @@ describe("league routes", () => {
       (db.query.rounds.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
       const res = await app.request("/leagues/league-1/rounds/99");
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("PATCH /leagues/:id/games/:gid", () => {
+    it("updates a game result and returns 200", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.games.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "g-1",
+        matchId: "m-1",
+        gameNumber: 1,
+      });
+      const updatedGame = {
+        id: "g-1",
+        matchId: "m-1",
+        gameNumber: 1,
+        winner: "team1",
+        team1Kos: 3,
+        team2Kos: 1,
+      };
+      mockReturning.mockResolvedValue([updatedGame]);
+      (db.query.games.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { winner: "team1", team1Kos: 3, team2Kos: 1 },
+      ]);
+
+      const res = await app.request("/leagues/league-1/games/g-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner: "team1", team1Kos: 3, team2Kos: 1 }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.game.winner).toBe("team1");
+    });
+
+    it("auto-derives match result when team wins 2 games", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.games.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "g-2",
+        matchId: "m-1",
+        gameNumber: 2,
+      });
+      mockReturning.mockResolvedValue([
+        { id: "g-2", matchId: "m-1", gameNumber: 2, winner: "team1", team1Kos: 3, team2Kos: 0 },
+      ]);
+      (db.query.games.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { winner: "team1", team1Kos: 3, team2Kos: 1 },
+        { winner: "team1", team1Kos: 3, team2Kos: 0 },
+      ]);
+
+      const res = await app.request("/leagues/league-1/games/g-2", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner: "team1", team1Kos: 3, team2Kos: 0 }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.matchResult).toBe("team1");
+    });
+
+    it("rejects missing fields with 400", async () => {
+      const res = await app.request("/leagues/league-1/games/g-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner: "team1" }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects invalid winner with 400", async () => {
+      const res = await app.request("/leagues/league-1/games/g-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner: "invalid", team1Kos: 0, team2Kos: 0 }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 404 for non-existent league", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/games/g-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner: "team1", team1Kos: 3, team2Kos: 1 }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for non-existent game", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.games.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/games/g-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner: "team1", team1Kos: 3, team2Kos: 1 }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("PATCH /leagues/:id/matches/:mid", () => {
+    it("overrides a match result and returns 200", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "m-1",
+        roundId: "r-1",
+      });
+      const updated = { id: "m-1", result: "team2" };
+      mockReturning.mockResolvedValue([updated]);
+
+      const res = await app.request("/leagues/league-1/matches/m-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ result: "team2" }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.match.result).toBe("team2");
+    });
+
+    it("rejects invalid result with 400", async () => {
+      const res = await app.request("/leagues/league-1/matches/m-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ result: "invalid" }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 404 for non-existent league", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/matches/m-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ result: "team1" }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for non-existent match", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/matches/m-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ result: "team1" }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("GET /leagues/:id/standings", () => {
+    it("returns standings with player info", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.rounds.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: "r-1",
+          roundNumber: 1,
+          matches: [
+            {
+              id: "m-1",
+              team1Player1: "p-1",
+              team1Player2: "p-2",
+              team2Player1: "p-3",
+              team2Player2: "p-4",
+              result: "team1",
+              isBye: false,
+              games: [
+                { winner: "team1", team1Kos: 3, team2Kos: 1 },
+                { winner: "team1", team1Kos: 2, team2Kos: 0 },
+              ],
+            },
+          ],
+        },
+      ]);
+      (db.query.players.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: "p-1", name: "Ash", showdownName: "ash_k" },
+        { id: "p-2", name: "Brock", showdownName: "brock_r" },
+        { id: "p-3", name: "Misty", showdownName: "misty_w" },
+        { id: "p-4", name: "Gary", showdownName: "gary_o" },
+      ]);
+
+      const res = await app.request("/leagues/league-1/standings");
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.standings).toHaveLength(4);
+      expect(body.standings[0].points).toBe(3);
+      expect(body.standings[0].playerName).toBe("Ash");
+      expect(body.standings[2].points).toBe(0);
+    });
+
+    it("returns 404 for non-existent league", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/standings");
 
       expect(res.status).toBe(404);
     });

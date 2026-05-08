@@ -78,6 +78,25 @@ export const matches = pgTable("matches", {
   bestOf: integer("best_of").notNull().default(3),
 });
 
-export const matchesRelations = relations(matches, ({ one }) => ({
+export const matchesRelations = relations(matches, ({ one, many }) => ({
   round: one(rounds, { fields: [matches.roundId], references: [rounds.id] }),
+  games: many(games),
+}));
+
+export const games = pgTable("games", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  matchId: uuid("match_id")
+    .notNull()
+    .references(() => matches.id),
+  gameNumber: integer("game_number").notNull(),
+  replayUrl: text("replay_url"),
+  protocol: text("protocol"),
+  winner: text("winner", { enum: ["team1", "team2", "draw"] }),
+  team1Kos: integer("team1_kos").notNull().default(0),
+  team2Kos: integer("team2_kos").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const gamesRelations = relations(games, ({ one }) => ({
+  match: one(matches, { fields: [games.matchId], references: [matches.id] }),
 }));
