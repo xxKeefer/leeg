@@ -8,6 +8,16 @@ const router = createRouter({
     { path: "/", component: HomeView, meta: { requiresAuth: true } },
     { path: "/about", component: () => import("../views/AboutView.vue") },
     { path: "/login", component: () => import("../views/LoginView.vue"), meta: { guest: true } },
+    {
+      path: "/leagues/create",
+      component: () => import("../views/LeagueCreateView.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/leagues/:id",
+      component: () => import("../views/LeagueDetailView.vue"),
+      meta: { requiresAuth: true },
+    },
     { path: "/:pathMatch(.*)*", component: () => import("../views/NotFound.vue") },
   ],
 });
