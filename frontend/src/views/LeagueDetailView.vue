@@ -9,6 +9,24 @@ interface Player {
   showdownName: string;
 }
 
+interface Match {
+  id: string;
+  team1Player1: string | null;
+  team1Player2: string | null;
+  team2Player1: string | null;
+  team2Player2: string | null;
+  isBye: boolean;
+  result: string | null;
+}
+
+interface Round {
+  id: string;
+  roundNumber: number;
+  roundType: string;
+  status: string;
+  matches: Match[];
+}
+
 interface League {
   id: string;
   name: string;
@@ -19,6 +37,7 @@ interface League {
 
 const route = useRoute();
 const league = ref<League | null>(null);
+const schedule = ref<Round[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 
@@ -26,8 +45,24 @@ const playerName = ref("");
 const showdownName = ref("");
 const enrolling = ref(false);
 const enrollError = ref<string | null>(null);
+const generating = ref(false);
+const generateError = ref<string | null>(null);
 
 const isDraft = computed(() => league.value?.status === "draft");
+const playerMap = computed(() => {
+  const map = new Map<string, string>();
+  if (league.value) {
+    for (const p of league.value.players) {
+      map.set(p.id, p.name);
+    }
+  }
+  return map;
+});
+
+function playerName2(id: string | null): string {
+  if (!id) return "";
+  return playerMap.value.get(id) ?? id;
+}
 
 async function fetchLeague() {
   loading.value = true;
@@ -35,10 +70,22 @@ async function fetchLeague() {
   try {
     const data = await apiFetch<{ league: League }>(`/leagues/${route.params.id}`);
     league.value = data.league;
+    if (data.league.status !== "draft") {
+      await fetchSchedule();
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to load league";
   } finally {
     loading.value = false;
+  }
+}
+
+async function fetchSchedule() {
+  try {
+    const data = await apiFetch<{ rounds: Round[] }>(`/leagues/${route.params.id}/schedule`);
+    schedule.value = data.rounds;
+  } catch {
+    // Schedule may not exist yet
   }
 }
 
@@ -71,6 +118,22 @@ async function removePlayer(playerId: string) {
   }
 }
 
+async function generateSchedule() {
+  generating.value = true;
+  generateError.value = null;
+  try {
+    await apiFetch(`/leagues/${route.params.id}/generate`, { method: "POST" });
+    if (league.value) {
+      league.value.status = "active";
+    }
+    await fetchSchedule();
+  } catch (e) {
+    generateError.value = e instanceof Error ? e.message : "Failed to generate schedule";
+  } finally {
+    generating.value = false;
+  }
+}
+
 function copyShowdownName(name: string) {
   navigator.clipboard.writeText(name);
 }
@@ -79,7 +142,7 @@ onMounted(fetchLeague);
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto mt-10">
+  <div class="max-w-4xl mx-auto mt-10">
     <div v-if="loading" class="text-center text-gray-500">Loading...</div>
     <div v-else-if="error" class="text-center text-red-600">{{ error }}</div>
     <div v-else-if="league">
@@ -100,7 +163,17 @@ onMounted(fetchLeague);
             </span>
           </p>
         </div>
+        <button
+          v-if="isDraft && league.players.length >= 4"
+          :disabled="generating"
+          class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+          @click="generateSchedule"
+        >
+          {{ generating ? "Generating..." : "Generate Schedule" }}
+        </button>
       </div>
+
+      <p v-if="generateError" class="text-red-600 text-sm mb-4">{{ generateError }}</p>
 
       <section class="mb-8">
         <h2 class="text-lg font-semibold mb-3">
@@ -174,6 +247,53 @@ onMounted(fetchLeague);
         </form>
 
         <p v-if="enrollError" class="text-red-600 text-sm mt-2">{{ enrollError }}</p>
+      </section>
+
+      <section v-if="schedule.length > 0" class="mt-8">
+        <h2 class="text-lg font-semibold mb-3">Schedule</h2>
+
+        <div class="space-y-4">
+          <div
+            v-for="round in schedule"
+            :key="round.id"
+            class="border rounded bg-white p-4"
+          >
+            <h3 class="font-medium mb-2">
+              Round {{ round.roundNumber }}
+              <span class="text-sm text-gray-500 ml-2">{{ round.status }}</span>
+            </h3>
+
+            <div class="space-y-2">
+              <div
+                v-for="match in round.matches"
+                :key="match.id"
+                class="flex items-center gap-2 text-sm"
+              >
+                <template v-if="match.isBye">
+                  <span class="text-gray-500 italic">
+                    BYE:
+                    {{ playerName2(match.team1Player1) }}
+                    <template v-if="match.team1Player2">
+                      &amp; {{ playerName2(match.team1Player2) }}
+                    </template>
+                  </span>
+                </template>
+                <template v-else>
+                  <span class="font-medium">
+                    {{ playerName2(match.team1Player1) }} &amp; {{ playerName2(match.team1Player2) }}
+                  </span>
+                  <span class="text-gray-400">vs</span>
+                  <span class="font-medium">
+                    {{ playerName2(match.team2Player1) }} &amp; {{ playerName2(match.team2Player2) }}
+                  </span>
+                  <span v-if="match.result" class="ml-2 text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                    {{ match.result }}
+                  </span>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   </div>

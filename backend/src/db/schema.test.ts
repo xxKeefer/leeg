@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTableColumns } from "drizzle-orm";
-import { users, leagues, players } from "./schema.js";
+import { users, leagues, players, rounds, matches } from "./schema.js";
 
 describe("users schema", () => {
   it("has the expected columns", () => {
@@ -86,5 +86,56 @@ describe("players schema", () => {
   it("leagueId is not null", () => {
     const columns = getTableColumns(players);
     expect(columns.leagueId.notNull).toBe(true);
+  });
+});
+
+describe("rounds schema", () => {
+  it("has the expected columns", () => {
+    const columns = getTableColumns(rounds);
+    expect(Object.keys(columns).sort()).toEqual(["id", "leagueId", "roundNumber", "roundType", "status"]);
+  });
+
+  it("leagueId is not null", () => {
+    const columns = getTableColumns(rounds);
+    expect(columns.leagueId.notNull).toBe(true);
+  });
+
+  it("roundNumber is not null", () => {
+    const columns = getTableColumns(rounds);
+    expect(columns.roundNumber.notNull).toBe(true);
+  });
+});
+
+describe("matches schema", () => {
+  it("has the expected columns", () => {
+    const columns = getTableColumns(matches);
+    expect(Object.keys(columns).sort()).toEqual([
+      "bestOf",
+      "id",
+      "isBye",
+      "matchType",
+      "result",
+      "roundId",
+      "team1Player1",
+      "team1Player2",
+      "team2Player1",
+      "team2Player2",
+    ]);
+  });
+
+  it("roundId is not null", () => {
+    const columns = getTableColumns(matches);
+    expect(columns.roundId.notNull).toBe(true);
+  });
+
+  it("isBye defaults to false", () => {
+    const columns = getTableColumns(matches);
+    expect(columns.isBye.notNull).toBe(true);
+  });
+
+  it("team player columns are nullable", () => {
+    const columns = getTableColumns(matches);
+    expect(columns.team1Player1.notNull).toBe(false);
+    expect(columns.team2Player1.notNull).toBe(false);
   });
 });

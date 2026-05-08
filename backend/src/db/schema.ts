@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, integer, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
@@ -25,6 +25,7 @@ export const leagues = pgTable("leagues", {
 
 export const leaguesRelations = relations(leagues, ({ many }) => ({
   players: many(players),
+  rounds: many(rounds),
 }));
 
 export const players = pgTable("players", {
@@ -39,4 +40,44 @@ export const players = pgTable("players", {
 
 export const playersRelations = relations(players, ({ one }) => ({
   league: one(leagues, { fields: [players.leagueId], references: [leagues.id] }),
+}));
+
+export const rounds = pgTable("rounds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  leagueId: uuid("league_id")
+    .notNull()
+    .references(() => leagues.id),
+  roundNumber: integer("round_number").notNull(),
+  roundType: text("round_type", { enum: ["regular", "finale"] })
+    .notNull()
+    .default("regular"),
+  status: text("status", { enum: ["pending", "complete"] })
+    .notNull()
+    .default("pending"),
+});
+
+export const roundsRelations = relations(rounds, ({ one, many }) => ({
+  league: one(leagues, { fields: [rounds.leagueId], references: [leagues.id] }),
+  matches: many(matches),
+}));
+
+export const matches = pgTable("matches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  roundId: uuid("round_id")
+    .notNull()
+    .references(() => rounds.id),
+  matchType: text("match_type", { enum: ["2hg", "ffa"] })
+    .notNull()
+    .default("2hg"),
+  team1Player1: uuid("team1_player1").references(() => players.id),
+  team1Player2: uuid("team1_player2").references(() => players.id),
+  team2Player1: uuid("team2_player1").references(() => players.id),
+  team2Player2: uuid("team2_player2").references(() => players.id),
+  result: text("result", { enum: ["team1", "team2", "draw", "bye"] }),
+  isBye: boolean("is_bye").notNull().default(false),
+  bestOf: integer("best_of").notNull().default(3),
+});
+
+export const matchesRelations = relations(matches, ({ one }) => ({
+  round: one(rounds, { fields: [matches.roundId], references: [rounds.id] }),
 }));
