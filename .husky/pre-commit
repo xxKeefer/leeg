@@ -1,0 +1,5 @@
+pnpm lint-staged
+pnpm --filter backend typecheck
+pnpm --filter frontend typecheck
+pnpm --filter backend test
+npx fallow dead-code --changed-since HEAD

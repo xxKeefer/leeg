@@ -1,0 +1,31 @@
+{
+  "name": "app-template",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter frontend dev & pnpm --filter backend dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "sandcastle": "npx tsx .sandcastle/main.ts"
+  },
+  "lint-staged": {
+    "*.{ts,vue}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,css,html,yaml,yml}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@ai-hero/sandcastle": "^0.5.7",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.9.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.3",
+    "typescript-eslint": "^8.59.1"
+  }
+}
