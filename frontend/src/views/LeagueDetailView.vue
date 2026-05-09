@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { apiFetch } from "../api/client";
 
 interface Player {
@@ -64,6 +64,7 @@ interface StandingEntry {
 }
 
 const route = useRoute();
+const router = useRouter();
 const league = ref<League | null>(null);
 const schedule = ref<Round[]>([]);
 const standings = ref<StandingEntry[]>([]);
@@ -84,6 +85,8 @@ const replaySubmitting = ref<Record<string, boolean>>({});
 const replayError = ref<Record<string, string>>({});
 const generatingFinale = ref(false);
 const finaleError = ref<string | null>(null);
+const deleting = ref(false);
+const confirmDelete = ref(false);
 const placementInputs = ref<Record<string, number>>({});
 const submittingPlacements = ref(false);
 
@@ -290,6 +293,18 @@ async function overrideMatchResult(matchId: string, result: string) {
   }
 }
 
+async function deleteLeague() {
+  deleting.value = true;
+  try {
+    await apiFetch(`/leagues/${route.params.id}`, { method: "DELETE" });
+    router.push("/");
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to delete league";
+    deleting.value = false;
+    confirmDelete.value = false;
+  }
+}
+
 function copyShowdownName(name: string) {
   navigator.clipboard.writeText(name);
 }
@@ -336,6 +351,29 @@ onMounted(fetchLeague);
           >
             {{ generatingFinale ? "Generating..." : "Generate Finale" }}
           </button>
+          <button
+            v-if="!confirmDelete"
+            class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            @click="confirmDelete = true"
+          >
+            Delete
+          </button>
+          <template v-else>
+            <span class="text-sm text-red-600 self-center">Are you sure?</span>
+            <button
+              :disabled="deleting"
+              class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+              @click="deleteLeague"
+            >
+              {{ deleting ? "Deleting..." : "Yes, delete" }}
+            </button>
+            <button
+              class="px-4 py-2 border rounded hover:bg-gray-50"
+              @click="confirmDelete = false"
+            >
+              Cancel
+            </button>
+          </template>
         </div>
       </div>
 
