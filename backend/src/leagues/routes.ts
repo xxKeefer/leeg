@@ -370,11 +370,7 @@ leagueRoutes.patch("/:id/games/:gid", async (c) => {
 leagueRoutes.patch("/:id/matches/:mid", async (c) => {
   const { id, mid } = c.req.param();
   const body = await c.req.json();
-  const { result } = body;
-
-  if (!result || !["team1", "team2", "draw"].includes(result)) {
-    return c.json({ error: "result must be team1, team2, or draw" }, 400);
-  }
+  const { result, team1Player1, team1Player2, team2Player1, team2Player2 } = body;
 
   const league = await db.query.leagues.findFirst({
     where: eq(leagues.id, id),
@@ -392,9 +388,27 @@ leagueRoutes.patch("/:id/matches/:mid", async (c) => {
     return c.json({ error: "Match not found" }, 404);
   }
 
+  const updates: Record<string, string | null> = {};
+
+  if (result) {
+    if (!["team1", "team2", "draw"].includes(result)) {
+      return c.json({ error: "result must be team1, team2, or draw" }, 400);
+    }
+    updates.result = result;
+  }
+
+  if (team1Player1 !== undefined) updates.team1Player1 = team1Player1;
+  if (team1Player2 !== undefined) updates.team1Player2 = team1Player2;
+  if (team2Player1 !== undefined) updates.team2Player1 = team2Player1;
+  if (team2Player2 !== undefined) updates.team2Player2 = team2Player2;
+
+  if (Object.keys(updates).length === 0) {
+    return c.json({ error: "Nothing to update" }, 400);
+  }
+
   const [updated] = await db
     .update(matches)
-    .set({ result })
+    .set(updates)
     .where(eq(matches.id, mid))
     .returning();
 

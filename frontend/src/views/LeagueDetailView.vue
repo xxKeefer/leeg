@@ -87,6 +87,8 @@ const generatingFinale = ref(false);
 const finaleError = ref<string | null>(null);
 const deleting = ref(false);
 const confirmDelete = ref(false);
+const editingMatchup = ref<string | null>(null);
+const matchupInputs = ref<Record<string, { t1p1: string; t1p2: string; t2p1: string; t2p2: string }>>({});
 const placementInputs = ref<Record<string, number>>({});
 const submittingPlacements = ref(false);
 
@@ -95,6 +97,15 @@ function getGameInput(gameId: string) {
     gameInputs.value[gameId] = { winner: "", team1Kos: 0, team2Kos: 0 };
   }
   return gameInputs.value[gameId];
+}
+
+function onWinnerChange(gameId: string) {
+  const input = getGameInput(gameId);
+  if (input.winner === "team1") {
+    input.team1Kos = 6;
+  } else if (input.winner === "team2") {
+    input.team2Kos = 6;
+  }
 }
 
 const isDraft = computed(() => league.value?.status === "draft");
@@ -290,6 +301,35 @@ async function overrideMatchResult(matchId: string, result: string) {
     await Promise.all([fetchSchedule(), fetchStandings()]);
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to override match result";
+  }
+}
+
+function startEditMatchup(match: Match) {
+  editingMatchup.value = match.id;
+  matchupInputs.value[match.id] = {
+    t1p1: match.team1Player1 ?? "",
+    t1p2: match.team1Player2 ?? "",
+    t2p1: match.team2Player1 ?? "",
+    t2p2: match.team2Player2 ?? "",
+  };
+}
+
+async function saveMatchup(matchId: string) {
+  const input = matchupInputs.value[matchId];
+  try {
+    await apiFetch(`/leagues/${route.params.id}/matches/${matchId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        team1Player1: input.t1p1,
+        team1Player2: input.t1p2,
+        team2Player1: input.t2p1,
+        team2Player2: input.t2p2,
+      }),
+    });
+    editingMatchup.value = null;
+    await fetchSchedule();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to update matchup";
   }
 }
 
@@ -595,7 +635,46 @@ onMounted(fetchLeague);
 
                 <!-- Regular 2HG Match Display -->
                 <template v-else>
-                  <div class="flex items-center gap-2 text-sm">
+                  <!-- Matchup Edit Mode -->
+                  <div v-if="editingMatchup === match.id && !match.isBye" class="space-y-2 text-xs">
+                    <div class="flex items-center gap-2">
+                      <label class="text-gray-500 w-14">Team 1</label>
+                      <select v-model="matchupInputs[match.id].t1p1" class="border rounded px-1 py-0.5 flex-1">
+                        <option v-for="p in league!.players" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      </select>
+                      <span class="text-gray-400">&amp;</span>
+                      <select v-model="matchupInputs[match.id].t1p2" class="border rounded px-1 py-0.5 flex-1">
+                        <option v-for="p in league!.players" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <label class="text-gray-500 w-14">Team 2</label>
+                      <select v-model="matchupInputs[match.id].t2p1" class="border rounded px-1 py-0.5 flex-1">
+                        <option v-for="p in league!.players" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      </select>
+                      <span class="text-gray-400">&amp;</span>
+                      <select v-model="matchupInputs[match.id].t2p2" class="border rounded px-1 py-0.5 flex-1">
+                        <option v-for="p in league!.players" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      </select>
+                    </div>
+                    <div class="flex gap-2">
+                      <button
+                        class="px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600"
+                        @click="saveMatchup(match.id)"
+                      >
+                        Save
+                      </button>
+                      <button
+                        class="px-2 py-0.5 border rounded hover:bg-gray-50"
+                        @click="editingMatchup = null"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Matchup Display Mode -->
+                  <div v-else class="flex items-center gap-2 text-sm">
                     <template v-if="match.isBye">
                       <span class="text-gray-500 italic">
                         BYE:
@@ -621,7 +700,14 @@ onMounted(fetchLeague);
                       </span>
                       <button
                         v-if="isActive && !match.isBye"
-                        class="ml-auto text-xs text-blue-500 hover:underline"
+                        class="ml-auto text-xs text-orange-500 hover:underline"
+                        @click="startEditMatchup(match)"
+                      >
+                        Swap
+                      </button>
+                      <button
+                        v-if="isActive && !match.isBye"
+                        class="text-xs text-blue-500 hover:underline"
                         @click="toggleMatch(match.id)"
                       >
                         {{ expandedMatch === match.id ? "Hide" : "Record" }}
@@ -657,38 +743,46 @@ onMounted(fetchLeague);
                           </button>
                         </template>
                         <template v-else>
-                          <select
-                            v-model="getGameInput(game.id).winner"
-                            class="border rounded px-1 py-0.5"
-                          >
-                            <option value="">Winner</option>
-                            <option value="team1">Team 1</option>
-                            <option value="team2">Team 2</option>
-                            <option value="draw">Draw</option>
-                          </select>
-                          <input
-                            v-model.number="getGameInput(game.id).team1Kos"
-                            type="number"
-                            min="0"
-                            max="6"
-                            placeholder="T1 KOs"
-                            class="border rounded px-1 py-0.5 w-16"
-                          />
-                          <input
-                            v-model.number="getGameInput(game.id).team2Kos"
-                            type="number"
-                            min="0"
-                            max="6"
-                            placeholder="T2 KOs"
-                            class="border rounded px-1 py-0.5 w-16"
-                          />
-                          <button
-                            class="px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600"
-                            :disabled="!getGameInput(game.id).winner"
-                            @click="submitGameResult(game.id, getGameInput(game.id).winner, getGameInput(game.id).team1Kos, getGameInput(game.id).team2Kos)"
-                          >
-                            Save
-                          </button>
+                          <div class="flex flex-col gap-1 w-full">
+                            <div class="flex items-center gap-2">
+                              <label class="text-gray-500 w-14">Winner</label>
+                              <select
+                                v-model="getGameInput(game.id).winner"
+                                class="border rounded px-1 py-0.5"
+                                @change="onWinnerChange(game.id)"
+                              >
+                                <option value="">--</option>
+                                <option value="team1">Team 1</option>
+                                <option value="team2">Team 2</option>
+                                <option value="draw">Draw</option>
+                              </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <label class="text-gray-500 w-14">T1 KOs</label>
+                              <input
+                                v-model.number="getGameInput(game.id).team1Kos"
+                                type="number"
+                                min="0"
+                                max="6"
+                                class="border rounded px-1 py-0.5 w-16"
+                              />
+                              <label class="text-gray-500 w-14">T2 KOs</label>
+                              <input
+                                v-model.number="getGameInput(game.id).team2Kos"
+                                type="number"
+                                min="0"
+                                max="6"
+                                class="border rounded px-1 py-0.5 w-16"
+                              />
+                              <button
+                                class="px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600"
+                                :disabled="!getGameInput(game.id).winner"
+                                @click="submitGameResult(game.id, getGameInput(game.id).winner, getGameInput(game.id).team1Kos, getGameInput(game.id).team2Kos)"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
                         </template>
                       </div>
                       <div v-if="!game.winner" class="flex items-center gap-2 pt-1">
