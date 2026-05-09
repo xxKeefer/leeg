@@ -45,6 +45,38 @@ describe("matchTeams", () => {
     expect(result.byeTeam).toBeDefined();
   });
 
+  it("distributes byes using bye counts", () => {
+    const standings = new Map<string, number>();
+    const byeCounts = new Map<string, number>();
+
+    const rounds: [string, string][][] = [
+      [["A", "B"], ["C", "D"], ["E", "F"]],
+      [["A", "C"], ["B", "E"], ["D", "F"]],
+      [["A", "D"], ["B", "F"], ["C", "E"]],
+    ];
+
+    const byeTeams: [string, string][] = [];
+    for (const teams of rounds) {
+      const result = matchTeams(teams, standings, byeCounts);
+      if (result.byeTeam) {
+        byeTeams.push(result.byeTeam);
+        for (const p of result.byeTeam) {
+          byeCounts.set(p, (byeCounts.get(p) ?? 0) + 1);
+        }
+      }
+    }
+
+    const byePlayers = byeTeams.flat();
+    const counts = new Map<string, number>();
+    for (const p of byePlayers) {
+      counts.set(p, (counts.get(p) ?? 0) + 1);
+    }
+
+    for (const [, count] of counts) {
+      expect(count).toBe(1);
+    }
+  });
+
   it("returns empty pairings for single team", () => {
     const teams: [string, string][] = [["A", "B"]];
     const standings = new Map([

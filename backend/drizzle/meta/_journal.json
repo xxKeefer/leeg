@@ -29,6 +29,13 @@
       "when": 1778281325486,
       "tag": "0003_greedy_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778310713707,
+      "tag": "0004_fluffy_black_bolt",
+      "breakpoints": true
     }
   ]
 }
