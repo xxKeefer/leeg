@@ -54,6 +54,6 @@ jobs:
           username: deploy
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd ~/apps/example-app
+            cd ~/apps/leeg
             docker compose pull
             docker compose up -d
