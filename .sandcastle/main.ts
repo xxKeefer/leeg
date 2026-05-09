@@ -52,7 +52,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // The agent signals completion via <promise>COMPLETE</promise> when done.
   // The result contains the branch name the agent worked on.
   // -------------------------------------------------------------------------
-  const implement = await sandcastle.run({
+  await sandcastle.run({
     hooks,
     copyToWorktree,
     sandbox: podman(),
@@ -63,41 +63,41 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     promptFile: "./.sandcastle/implement-prompt.md",
   });
 
-  // Extract the branch the agent worked on so the reviewer can target it.
-  const branch = implement.branch;
+  // // Extract the branch the agent worked on so the reviewer can target it.
+  // const branch = implement.branch;
 
-  if (!implement.commits.length) {
-    console.log("Implementation agent made no commits. Skipping review.");
-    continue;
-  }
+  // if (!implement.commits.length) {
+  //   console.log("Implementation agent made no commits. Skipping review.");
+  //   continue;
+  // }
 
-  console.log(`\nImplementation complete on branch: ${branch}`);
-  console.log(`Commits: ${implement.commits.length}`);
+  // console.log(`\nImplementation complete on branch: ${branch}`);
+  // console.log(`Commits: ${implement.commits.length}`);
 
-  // -------------------------------------------------------------------------
-  // Phase 2: Review
-  //
-  // A second sonnet agent reviews the diff of the branch produced by Phase 1.
-  // It uses the {{BRANCH}} prompt argument to inspect the right branch, and
-  // either approves or makes corrections directly on the branch.
-  // -------------------------------------------------------------------------
-  await sandcastle.run({
-    hooks,
-    copyToWorktree,
-    sandbox: podman(),
-    branchStrategy: { type: "branch", branch },
-    name: "reviewer",
-    maxIterations: 1,
-    agent: sandcastle.claudeCode("claude-opus-4-6"),
-    promptFile: "./.sandcastle/review-prompt.md",
-    // Prompt arguments substitute {{BRANCH}} in review-prompt.md before the
-    // agent sees the prompt.
-    promptArgs: {
-      BRANCH: branch,
-    },
-  });
+  // // -------------------------------------------------------------------------
+  // // Phase 2: Review
+  // //
+  // // A second sonnet agent reviews the diff of the branch produced by Phase 1.
+  // // It uses the {{BRANCH}} prompt argument to inspect the right branch, and
+  // // either approves or makes corrections directly on the branch.
+  // // -------------------------------------------------------------------------
+  // await sandcastle.run({
+  //   hooks,
+  //   copyToWorktree,
+  //   sandbox: podman(),
+  //   branchStrategy: { type: "branch", branch },
+  //   name: "reviewer",
+  //   maxIterations: 1,
+  //   agent: sandcastle.claudeCode("claude-opus-4-6"),
+  //   promptFile: "./.sandcastle/review-prompt.md",
+  //   // Prompt arguments substitute {{BRANCH}} in review-prompt.md before the
+  //   // agent sees the prompt.
+  //   promptArgs: {
+  //     BRANCH: branch,
+  //   },
+  // });
 
-  console.log("\nReview complete.");
+  // console.log("\nReview complete.");
 }
 
 console.log("\nAll done.");
