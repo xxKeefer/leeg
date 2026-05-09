@@ -23,6 +23,13 @@ export interface StandingEntry {
   isFinalist: boolean;
 }
 
+export interface FfaPlacement {
+  playerId: string;
+  placement: number | null;
+}
+
+const PLACEMENT_POINTS: Record<number, number> = { 1: 6, 2: 4, 3: 2, 4: 0 };
+
 export function deriveMatchResult(games: GameData[]): "team1" | "team2" | "draw" | null {
   let team1Wins = 0;
   let team2Wins = 0;
@@ -47,7 +54,7 @@ export function deriveMatchResult(games: GameData[]): "team1" | "team2" | "draw"
   return null;
 }
 
-export function computeStandings(matches: MatchData[]): StandingEntry[] {
+export function computeStandings(matches: MatchData[], ffaPlacements: FfaPlacement[] = []): StandingEntry[] {
   const stats = new Map<string, { points: number; koDiff: number }>();
 
   function ensure(playerId: string | null) {
@@ -90,6 +97,13 @@ export function computeStandings(matches: MatchData[]): StandingEntry[] {
     const diff = totalTeam1Kos - totalTeam2Kos;
     for (const pid of team1) stats.get(pid)!.koDiff += diff;
     for (const pid of team2) stats.get(pid)!.koDiff -= diff;
+  }
+
+  for (const ffa of ffaPlacements) {
+    ensure(ffa.playerId);
+    if (ffa.placement != null) {
+      stats.get(ffa.playerId)!.points += PLACEMENT_POINTS[ffa.placement] ?? 0;
+    }
   }
 
   const entries: StandingEntry[] = [];
