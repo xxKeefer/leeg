@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { leagues, players, rounds, matches, games, ffaParticipants } from "../db/schema.js";
 import { generatePartnershipSchedule } from "../scheduler/round-robin.js";
@@ -10,6 +10,15 @@ import { parseProtocol } from "../parser/protocol.js";
 import type { AuthVariables } from "../types.js";
 
 export const leagueRoutes = new Hono<{ Variables: AuthVariables }>();
+
+leagueRoutes.get("/", async (c) => {
+  const userId = c.get("userId");
+  const userLeagues = await db.query.leagues.findMany({
+    where: eq(leagues.createdBy, userId),
+    with: { players: true },
+  });
+  return c.json({ leagues: userLeagues });
+});
 
 leagueRoutes.post("/", async (c) => {
   const body = await c.req.json();
@@ -41,6 +50,67 @@ leagueRoutes.get("/:id", async (c) => {
   }
 
   return c.json({ league });
+});
+
+leagueRoutes.patch("/:id", async (c) => {
+  const { id } = c.req.param();
+  const body = await c.req.json();
+  const { name, format } = body;
+
+  const league = await db.query.leagues.findFirst({
+    where: eq(leagues.id, id),
+  });
+
+  if (!league) {
+    return c.json({ error: "League not found" }, 404);
+  }
+
+  const updates: Record<string, string> = {};
+  if (name) updates.name = name;
+  if (format) updates.format = format;
+
+  if (Object.keys(updates).length === 0) {
+    return c.json({ error: "Nothing to update" }, 400);
+  }
+
+  const [updated] = await db
+    .update(leagues)
+    .set(updates)
+    .where(eq(leagues.id, id))
+    .returning();
+
+  return c.json({ league: updated });
+});
+
+leagueRoutes.delete("/:id", async (c) => {
+  const { id } = c.req.param();
+
+  const league = await db.query.leagues.findFirst({
+    where: eq(leagues.id, id),
+  });
+
+  if (!league) {
+    return c.json({ error: "League not found" }, 404);
+  }
+
+  const leagueRounds = await db.query.rounds.findMany({
+    where: eq(rounds.leagueId, id),
+    with: { matches: true },
+  });
+
+  const matchIds = leagueRounds.flatMap((r) => r.matches.map((m) => m.id));
+
+  if (matchIds.length > 0) {
+    await db.delete(ffaParticipants).where(inArray(ffaParticipants.matchId, matchIds));
+    await db.delete(games).where(inArray(games.matchId, matchIds));
+    await db.delete(matches).where(inArray(matches.roundId, leagueRounds.map((r) => r.id)));
+  }
+
+  await db.delete(rounds).where(eq(rounds.leagueId, id));
+  await db.delete(players).where(eq(players.leagueId, id));
+  await db.delete(leagues).where(eq(leagues.id, id));
+
+  return c.json({ success: true });
 });
 
 leagueRoutes.post("/:id/players", async (c) => {
@@ -134,6 +204,7 @@ leagueRoutes.post("/:id/generate", async (c) => {
   const playerIds = leaguePlayers.map((p) => p.id);
   const schedule = generatePartnershipSchedule(playerIds);
   const standings = new Map<string, number>();
+  const byeCounts = new Map<string, number>();
 
   for (const round of schedule) {
     const [dbRound] = await db
@@ -141,7 +212,7 @@ leagueRoutes.post("/:id/generate", async (c) => {
       .values({ leagueId: id, roundNumber: round.roundNumber })
       .returning();
 
-    const teamResult = matchTeams(round.teams, standings);
+    const teamResult = matchTeams(round.teams, standings, byeCounts);
 
     for (const pairing of teamResult.pairings) {
       const [match] = await db
@@ -163,6 +234,9 @@ leagueRoutes.post("/:id/generate", async (c) => {
     }
 
     if (teamResult.byeTeam) {
+      for (const p of teamResult.byeTeam) {
+        byeCounts.set(p, (byeCounts.get(p) ?? 0) + 1);
+      }
       await db.insert(matches).values({
         roundId: dbRound.id,
         team1Player1: teamResult.byeTeam[0],
@@ -173,6 +247,7 @@ leagueRoutes.post("/:id/generate", async (c) => {
     }
 
     if (round.byePlayer) {
+      byeCounts.set(round.byePlayer, (byeCounts.get(round.byePlayer) ?? 0) + 1);
       await db.insert(matches).values({
         roundId: dbRound.id,
         team1Player1: round.byePlayer,
