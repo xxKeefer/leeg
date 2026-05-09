@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTableColumns } from "drizzle-orm";
-import { users, leagues, players, rounds, matches } from "./schema.js";
+import { users, leagues, players, rounds, matches, ffaParticipants } from "./schema.js";
 
 describe("users schema", () => {
   it("has the expected columns", () => {
@@ -137,5 +137,28 @@ describe("matches schema", () => {
     const columns = getTableColumns(matches);
     expect(columns.team1Player1.notNull).toBe(false);
     expect(columns.team2Player1.notNull).toBe(false);
+  });
+});
+
+describe("ffaParticipants schema", () => {
+  it("has the expected columns", () => {
+    const columns = getTableColumns(ffaParticipants);
+    expect(Object.keys(columns).sort()).toEqual([
+      "id",
+      "matchId",
+      "placement",
+      "playerId",
+    ]);
+  });
+
+  it("placement is nullable", () => {
+    const columns = getTableColumns(ffaParticipants);
+    expect(columns.placement.notNull).toBe(false);
+  });
+
+  it("matchId and playerId are required", () => {
+    const columns = getTableColumns(ffaParticipants);
+    expect(columns.matchId.notNull).toBe(true);
+    expect(columns.playerId.notNull).toBe(true);
   });
 });

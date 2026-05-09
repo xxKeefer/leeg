@@ -81,6 +81,7 @@ export const matches = pgTable("matches", {
 export const matchesRelations = relations(matches, ({ one, many }) => ({
   round: one(rounds, { fields: [matches.roundId], references: [rounds.id] }),
   games: many(games),
+  ffaParticipants: many(ffaParticipants),
 }));
 
 export const games = pgTable("games", {
@@ -99,4 +100,20 @@ export const games = pgTable("games", {
 
 export const gamesRelations = relations(games, ({ one }) => ({
   match: one(matches, { fields: [games.matchId], references: [matches.id] }),
+}));
+
+export const ffaParticipants = pgTable("ffa_participants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  matchId: uuid("match_id")
+    .notNull()
+    .references(() => matches.id),
+  playerId: uuid("player_id")
+    .notNull()
+    .references(() => players.id),
+  placement: integer("placement"),
+});
+
+export const ffaParticipantsRelations = relations(ffaParticipants, ({ one }) => ({
+  match: one(matches, { fields: [ffaParticipants.matchId], references: [matches.id] }),
+  player: one(players, { fields: [ffaParticipants.playerId], references: [players.id] }),
 }));

@@ -49,6 +49,9 @@ vi.mock("../db/index.js", () => ({
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      ffaParticipants: {
+        findMany: vi.fn(),
+      },
     },
   },
 }));
@@ -849,6 +852,229 @@ describe("league routes", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.matchResult).toBe("team1");
+    });
+  });
+
+  describe("POST /leagues/:id/finale", () => {
+    it("generates finale round and returns 201", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.rounds.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: "r-1",
+          roundNumber: 1,
+          status: "complete",
+          matches: [
+            {
+              id: "m-1",
+              team1Player1: "p-1",
+              team1Player2: "p-2",
+              team2Player1: "p-3",
+              team2Player2: "p-4",
+              result: "team1",
+              isBye: false,
+              games: [
+                { winner: "team1", team1Kos: 3, team2Kos: 0 },
+                { winner: "team1", team1Kos: 3, team2Kos: 0 },
+              ],
+            },
+          ],
+        },
+      ]);
+      (db.query.players.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: "p-1", name: "A" },
+        { id: "p-2", name: "B" },
+        { id: "p-3", name: "C" },
+        { id: "p-4", name: "D" },
+      ]);
+      mockReturning.mockResolvedValue([{ id: "r-finale", roundNumber: 2 }]);
+
+      const res = await app.request("/leagues/league-1/finale", { method: "POST" });
+
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body.finaleRound).toBeDefined();
+      expect(body.participants).toHaveLength(4);
+    });
+
+    it("rejects non-active league with 400", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "draft",
+      });
+
+      const res = await app.request("/leagues/league-1/finale", { method: "POST" });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects if not all rounds are complete with 400", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+      (db.query.rounds.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: "r-1",
+          roundNumber: 1,
+          status: "pending",
+          matches: [
+            {
+              id: "m-1",
+              team1Player1: "p-1",
+              team1Player2: "p-2",
+              team2Player1: "p-3",
+              team2Player2: "p-4",
+              result: null,
+              isBye: false,
+              games: [],
+            },
+          ],
+        },
+      ]);
+
+      const res = await app.request("/leagues/league-1/finale", { method: "POST" });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 404 for non-existent league", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/finale", { method: "POST" });
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("PATCH /leagues/:id/matches/:mid/placements", () => {
+    it("records FFA placements and returns 200", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "finale",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "m-1",
+        matchType: "ffa",
+      });
+      (db.query.ffaParticipants.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: "fp-1", matchId: "m-1", playerId: "p-1", placement: null },
+        { id: "fp-2", matchId: "m-1", playerId: "p-2", placement: null },
+        { id: "fp-3", matchId: "m-1", playerId: "p-3", placement: null },
+        { id: "fp-4", matchId: "m-1", playerId: "p-4", placement: null },
+      ]);
+      mockReturning.mockResolvedValue([{}]);
+
+      const res = await app.request("/leagues/league-1/matches/m-1/placements", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          placements: [
+            { playerId: "p-1", placement: 1 },
+            { playerId: "p-2", placement: 2 },
+            { playerId: "p-3", placement: 3 },
+            { playerId: "p-4", placement: 4 },
+          ],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+    });
+
+    it("rejects non-finale league with 400", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "active",
+      });
+
+      const res = await app.request("/leagues/league-1/matches/m-1/placements", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          placements: [
+            { playerId: "p-1", placement: 1 },
+            { playerId: "p-2", placement: 2 },
+            { playerId: "p-3", placement: 3 },
+            { playerId: "p-4", placement: 4 },
+          ],
+        }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects non-ffa match with 400", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "finale",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "m-1",
+        matchType: "2hg",
+      });
+
+      const res = await app.request("/leagues/league-1/matches/m-1/placements", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          placements: [
+            { playerId: "p-1", placement: 1 },
+            { playerId: "p-2", placement: 2 },
+            { playerId: "p-3", placement: 3 },
+            { playerId: "p-4", placement: 4 },
+          ],
+        }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects missing placements with 400", async () => {
+      const res = await app.request("/leagues/league-1/matches/m-1/placements", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 404 for non-existent league", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/matches/m-1/placements", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          placements: [
+            { playerId: "p-1", placement: 1 },
+          ],
+        }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for non-existent match", async () => {
+      (db.query.leagues.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: "league-1",
+        status: "finale",
+      });
+      (db.query.matches.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+      const res = await app.request("/leagues/league-1/matches/m-1/placements", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          placements: [
+            { playerId: "p-1", placement: 1 },
+          ],
+        }),
+      });
+
+      expect(res.status).toBe(404);
     });
   });
 });

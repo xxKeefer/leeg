@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveMatchResult, computeStandings, type MatchData, type GameData } from "./compute.js";
+import { deriveMatchResult, computeStandings, type MatchData, type GameData, type FfaPlacement } from "./compute.js";
 
 describe("deriveMatchResult", () => {
   it("returns team1 when team1 wins 2 games", () => {
@@ -322,5 +322,85 @@ describe("computeStandings", () => {
       expect(s.points).toBe(0);
       expect(s.koDifferential).toBe(0);
     }
+  });
+
+  it("adds FFA placement points to standings", () => {
+    const matches: MatchData[] = [
+      {
+        id: "m1",
+        team1Player1: "p1",
+        team1Player2: "p2",
+        team2Player1: "p3",
+        team2Player2: "p4",
+        result: "team1",
+        isBye: false,
+        games: [
+          { winner: "team1", team1Kos: 3, team2Kos: 0 },
+          { winner: "team1", team1Kos: 3, team2Kos: 0 },
+        ],
+      },
+    ];
+    const ffaPlacements: FfaPlacement[] = [
+      { playerId: "p1", placement: 1 },
+      { playerId: "p2", placement: 2 },
+      { playerId: "p3", placement: 3 },
+      { playerId: "p4", placement: 4 },
+    ];
+
+    const standings = computeStandings(matches, ffaPlacements);
+
+    const p1 = standings.find((s) => s.playerId === "p1")!;
+    const p2 = standings.find((s) => s.playerId === "p2")!;
+    const p3 = standings.find((s) => s.playerId === "p3")!;
+    const p4 = standings.find((s) => s.playerId === "p4")!;
+
+    expect(p1.points).toBe(3 + 6);
+    expect(p2.points).toBe(3 + 4);
+    expect(p3.points).toBe(0 + 2);
+    expect(p4.points).toBe(0 + 0);
+  });
+
+  it("handles empty FFA placements", () => {
+    const matches: MatchData[] = [
+      {
+        id: "m1",
+        team1Player1: "p1",
+        team1Player2: "p2",
+        team2Player1: "p3",
+        team2Player2: "p4",
+        result: "team1",
+        isBye: false,
+        games: [
+          { winner: "team1", team1Kos: 3, team2Kos: 0 },
+          { winner: "team1", team1Kos: 3, team2Kos: 0 },
+        ],
+      },
+    ];
+
+    const standings = computeStandings(matches, []);
+    const p1 = standings.find((s) => s.playerId === "p1")!;
+    expect(p1.points).toBe(3);
+  });
+
+  it("handles FFA placements with null placement (not yet recorded)", () => {
+    const matches: MatchData[] = [
+      {
+        id: "m1",
+        team1Player1: "p1",
+        team1Player2: null,
+        team2Player1: null,
+        team2Player2: null,
+        result: "bye",
+        isBye: true,
+        games: [],
+      },
+    ];
+    const ffaPlacements: FfaPlacement[] = [
+      { playerId: "p1", placement: null },
+    ];
+
+    const standings = computeStandings(matches, ffaPlacements);
+    const p1 = standings.find((s) => s.playerId === "p1")!;
+    expect(p1.points).toBe(1);
   });
 });
