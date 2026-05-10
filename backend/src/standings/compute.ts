@@ -1,22 +1,22 @@
-export interface GameData {
-  winner: "team1" | "team2" | "draw" | null;
-  team1Kos: number;
-  team2Kos: number;
+export interface MatchData {
+  winner: "duo1" | "duo2" | "draw" | null;
+  duo1Kos: number;
+  duo2Kos: number;
 }
 
-export interface MatchData {
+export interface SetData {
   id: string;
-  team1Player1: string | null;
-  team1Player2: string | null;
-  team2Player1: string | null;
-  team2Player2: string | null;
-  result: "team1" | "team2" | "draw" | "bye" | null;
+  duo1Trainer1: string | null;
+  duo1Trainer2: string | null;
+  duo2Trainer1: string | null;
+  duo2Trainer2: string | null;
+  result: "duo1" | "duo2" | "draw" | "bye" | null;
   isBye: boolean;
-  games: GameData[];
+  matches: MatchData[];
 }
 
 export interface StandingEntry {
-  playerId: string;
+  trainerId: string;
   points: number;
   koDifferential: number;
   rank: number;
@@ -24,91 +24,91 @@ export interface StandingEntry {
 }
 
 export interface FfaPlacement {
-  playerId: string;
+  trainerId: string;
   placement: number | null;
 }
 
 const PLACEMENT_POINTS: Record<number, number> = { 1: 6, 2: 4, 3: 2, 4: 0 };
 
-export function deriveMatchResult(games: GameData[]): "team1" | "team2" | "draw" | null {
-  let team1Wins = 0;
-  let team2Wins = 0;
+export function deriveSetResult(matches: MatchData[]): "duo1" | "duo2" | "draw" | null {
+  let duo1Wins = 0;
+  let duo2Wins = 0;
   let draws = 0;
 
-  for (const g of games) {
-    if (g.winner === "team1") team1Wins++;
-    else if (g.winner === "team2") team2Wins++;
-    else if (g.winner === "draw") draws++;
+  for (const m of matches) {
+    if (m.winner === "duo1") duo1Wins++;
+    else if (m.winner === "duo2") duo2Wins++;
+    else if (m.winner === "draw") draws++;
   }
 
-  if (team1Wins >= 2) return "team1";
-  if (team2Wins >= 2) return "team2";
+  if (duo1Wins >= 2) return "duo1";
+  if (duo2Wins >= 2) return "duo2";
 
-  const totalPlayed = team1Wins + team2Wins + draws;
+  const totalPlayed = duo1Wins + duo2Wins + draws;
   if (totalPlayed >= 3) {
-    if (team1Wins > team2Wins) return "team1";
-    if (team2Wins > team1Wins) return "team2";
+    if (duo1Wins > duo2Wins) return "duo1";
+    if (duo2Wins > duo1Wins) return "duo2";
     return "draw";
   }
 
   return null;
 }
 
-export function computeStandings(matches: MatchData[], ffaPlacements: FfaPlacement[] = []): StandingEntry[] {
+export function computeStandings(sets: SetData[], ffaPlacements: FfaPlacement[] = []): StandingEntry[] {
   const stats = new Map<string, { points: number; koDiff: number }>();
 
-  function ensure(playerId: string | null) {
-    if (!playerId) return;
-    if (!stats.has(playerId)) {
-      stats.set(playerId, { points: 0, koDiff: 0 });
+  function ensure(trainerId: string | null) {
+    if (!trainerId) return;
+    if (!stats.has(trainerId)) {
+      stats.set(trainerId, { points: 0, koDiff: 0 });
     }
   }
 
-  for (const match of matches) {
-    if (match.isBye) {
-      const byePlayers = [match.team1Player1, match.team1Player2].filter(Boolean);
-      for (const pid of byePlayers) {
-        ensure(pid);
-        stats.get(pid!)!.points += 1;
+  for (const set of sets) {
+    if (set.isBye) {
+      const byeTrainers = [set.duo1Trainer1, set.duo1Trainer2].filter(Boolean);
+      for (const tid of byeTrainers) {
+        ensure(tid);
+        stats.get(tid!)!.points += 1;
       }
       continue;
     }
 
-    const team1 = [match.team1Player1, match.team1Player2].filter(Boolean) as string[];
-    const team2 = [match.team2Player1, match.team2Player2].filter(Boolean) as string[];
-    for (const pid of [...team1, ...team2]) ensure(pid);
+    const duo1 = [set.duo1Trainer1, set.duo1Trainer2].filter(Boolean) as string[];
+    const duo2 = [set.duo2Trainer1, set.duo2Trainer2].filter(Boolean) as string[];
+    for (const tid of [...duo1, ...duo2]) ensure(tid);
 
-    const result = match.result;
+    const result = set.result;
     if (!result) continue;
 
-    const pointsTeam1 = result === "team1" ? 3 : result === "draw" ? 1 : 0;
-    const pointsTeam2 = result === "team2" ? 3 : result === "draw" ? 1 : 0;
+    const pointsDuo1 = result === "duo1" ? 3 : result === "draw" ? 1 : 0;
+    const pointsDuo2 = result === "duo2" ? 3 : result === "draw" ? 1 : 0;
 
-    for (const pid of team1) stats.get(pid)!.points += pointsTeam1;
-    for (const pid of team2) stats.get(pid)!.points += pointsTeam2;
+    for (const tid of duo1) stats.get(tid)!.points += pointsDuo1;
+    for (const tid of duo2) stats.get(tid)!.points += pointsDuo2;
 
-    let totalTeam1Kos = 0;
-    let totalTeam2Kos = 0;
-    for (const g of match.games) {
-      totalTeam1Kos += g.team1Kos;
-      totalTeam2Kos += g.team2Kos;
+    let totalDuo1Kos = 0;
+    let totalDuo2Kos = 0;
+    for (const m of set.matches) {
+      totalDuo1Kos += m.duo1Kos;
+      totalDuo2Kos += m.duo2Kos;
     }
 
-    const diff = totalTeam1Kos - totalTeam2Kos;
-    for (const pid of team1) stats.get(pid)!.koDiff += diff;
-    for (const pid of team2) stats.get(pid)!.koDiff -= diff;
+    const diff = totalDuo1Kos - totalDuo2Kos;
+    for (const tid of duo1) stats.get(tid)!.koDiff += diff;
+    for (const tid of duo2) stats.get(tid)!.koDiff -= diff;
   }
 
   for (const ffa of ffaPlacements) {
-    ensure(ffa.playerId);
+    ensure(ffa.trainerId);
     if (ffa.placement != null) {
-      stats.get(ffa.playerId)!.points += PLACEMENT_POINTS[ffa.placement] ?? 0;
+      stats.get(ffa.trainerId)!.points += PLACEMENT_POINTS[ffa.placement] ?? 0;
     }
   }
 
   const entries: StandingEntry[] = [];
-  for (const [playerId, { points, koDiff }] of stats) {
-    entries.push({ playerId, points, koDifferential: koDiff, rank: 0, isFinalist: false });
+  for (const [trainerId, { points, koDiff }] of stats) {
+    entries.push({ trainerId, points, koDifferential: koDiff, rank: 0, isFinalist: false });
   }
 
   entries.sort((a, b) => {

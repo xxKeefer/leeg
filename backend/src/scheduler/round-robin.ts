@@ -1,12 +1,12 @@
 export interface ScheduleRound {
   roundNumber: number;
-  teams: [string, string][];
-  byePlayer: string | null;
+  duos: [string, string][];
+  byeTrainer: string | null;
 }
 
-export function generatePartnershipSchedule(playerIds: string[]): ScheduleRound[] {
-  const isOdd = playerIds.length % 2 !== 0;
-  const participants = [...playerIds];
+export function generatePartnershipSchedule(trainerIds: string[]): ScheduleRound[] {
+  const isOdd = trainerIds.length % 2 !== 0;
+  const participants = [...trainerIds];
 
   if (isOdd) {
     participants.push("__phantom__");
@@ -21,26 +21,26 @@ export function generatePartnershipSchedule(playerIds: string[]): ScheduleRound[
 
   for (let r = 0; r < totalRounds; r++) {
     const current = [fixed, ...rotating];
-    const teams: [string, string][] = [];
-    let byePlayer: string | null = null;
+    const duos: [string, string][] = [];
+    let byeTrainer: string | null = null;
 
     for (let i = 0; i < n / 2; i++) {
       const p1 = current[i];
       const p2 = current[n - 1 - i];
 
       if (p1 === "__phantom__") {
-        byePlayer = p2;
+        byeTrainer = p2;
       } else if (p2 === "__phantom__") {
-        byePlayer = p1;
+        byeTrainer = p1;
       } else {
-        teams.push([p1, p2]);
+        duos.push([p1, p2]);
       }
     }
 
     rounds.push({
       roundNumber: r + 1,
-      teams,
-      byePlayer,
+      duos,
+      byeTrainer,
     });
 
     const last = rotating.pop()!;

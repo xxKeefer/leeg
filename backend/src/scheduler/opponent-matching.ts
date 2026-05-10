@@ -1,48 +1,48 @@
-export interface TeamPairing {
-  team1: [string, string];
-  team2: [string, string];
+export interface DuoPairing {
+  duo1: [string, string];
+  duo2: [string, string];
 }
 
 export interface MatchResult {
-  pairings: TeamPairing[];
-  byeTeam: [string, string] | null;
+  pairings: DuoPairing[];
+  byeDuo: [string, string] | null;
 }
 
-function teamPoints(team: [string, string], standings: Map<string, number>): number {
-  return (standings.get(team[0]) ?? 0) + (standings.get(team[1]) ?? 0);
+function duoPoints(duo: [string, string], standings: Map<string, number>): number {
+  return (standings.get(duo[0]) ?? 0) + (standings.get(duo[1]) ?? 0);
 }
 
-function teamByeCount(team: [string, string], byeCounts: Map<string, number>): number {
-  return (byeCounts.get(team[0]) ?? 0) + (byeCounts.get(team[1]) ?? 0);
+function duoByeCount(duo: [string, string], byeCounts: Map<string, number>): number {
+  return (byeCounts.get(duo[0]) ?? 0) + (byeCounts.get(duo[1]) ?? 0);
 }
 
-export function matchTeams(
-  teams: [string, string][],
+export function matchDuos(
+  duos: [string, string][],
   standings: Map<string, number>,
   byeCounts?: Map<string, number>,
 ): MatchResult {
-  if (teams.length === 0) {
-    return { pairings: [], byeTeam: null };
+  if (duos.length === 0) {
+    return { pairings: [], byeDuo: null };
   }
 
-  const sorted = [...teams].sort((a, b) => teamPoints(b, standings) - teamPoints(a, standings));
+  const sorted = [...duos].sort((a, b) => duoPoints(b, standings) - duoPoints(a, standings));
 
-  let byeTeam: [string, string] | null = null;
+  let byeDuo: [string, string] | null = null;
 
   if (sorted.length % 2 !== 0) {
     if (byeCounts) {
-      sorted.sort((a, b) => teamByeCount(a, byeCounts) - teamByeCount(b, byeCounts));
-      byeTeam = sorted.shift()!;
-      sorted.sort((a, b) => teamPoints(b, standings) - teamPoints(a, standings));
+      sorted.sort((a, b) => duoByeCount(a, byeCounts) - duoByeCount(b, byeCounts));
+      byeDuo = sorted.shift()!;
+      sorted.sort((a, b) => duoPoints(b, standings) - duoPoints(a, standings));
     } else {
-      byeTeam = sorted.shift()!;
+      byeDuo = sorted.shift()!;
     }
   }
 
-  const pairings: TeamPairing[] = [];
+  const pairings: DuoPairing[] = [];
   for (let i = 0; i < sorted.length; i += 2) {
-    pairings.push({ team1: sorted[i], team2: sorted[i + 1] });
+    pairings.push({ duo1: sorted[i], duo2: sorted[i + 1] });
   }
 
-  return { pairings, byeTeam };
+  return { pairings, byeDuo };
 }

@@ -24,11 +24,11 @@ export const leagues = pgTable("leagues", {
 });
 
 export const leaguesRelations = relations(leagues, ({ many }) => ({
-  players: many(players),
+  trainers: many(trainers),
   rounds: many(rounds),
 }));
 
-export const players = pgTable("players", {
+export const trainers = pgTable("trainers", {
   id: uuid("id").primaryKey().defaultRandom(),
   leagueId: uuid("league_id")
     .notNull()
@@ -38,8 +38,8 @@ export const players = pgTable("players", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const playersRelations = relations(players, ({ one }) => ({
-  league: one(leagues, { fields: [players.leagueId], references: [leagues.id] }),
+export const trainersRelations = relations(trainers, ({ one }) => ({
+  league: one(leagues, { fields: [trainers.leagueId], references: [leagues.id] }),
 }));
 
 export const rounds = pgTable("rounds", {
@@ -58,62 +58,62 @@ export const rounds = pgTable("rounds", {
 
 export const roundsRelations = relations(rounds, ({ one, many }) => ({
   league: one(leagues, { fields: [rounds.leagueId], references: [leagues.id] }),
-  matches: many(matches),
+  sets: many(sets),
 }));
 
-export const matches = pgTable("matches", {
+export const sets = pgTable("sets", {
   id: uuid("id").primaryKey().defaultRandom(),
   roundId: uuid("round_id")
     .notNull()
     .references(() => rounds.id),
-  matchType: text("match_type", { enum: ["2hg", "ffa"] })
+  setType: text("set_type", { enum: ["2hg", "ffa"] })
     .notNull()
     .default("2hg"),
-  team1Player1: uuid("team1_player1").references(() => players.id),
-  team1Player2: uuid("team1_player2").references(() => players.id),
-  team2Player1: uuid("team2_player1").references(() => players.id),
-  team2Player2: uuid("team2_player2").references(() => players.id),
-  result: text("result", { enum: ["team1", "team2", "draw", "bye"] }),
+  duo1Trainer1: uuid("duo1_trainer1").references(() => trainers.id),
+  duo1Trainer2: uuid("duo1_trainer2").references(() => trainers.id),
+  duo2Trainer1: uuid("duo2_trainer1").references(() => trainers.id),
+  duo2Trainer2: uuid("duo2_trainer2").references(() => trainers.id),
+  result: text("result", { enum: ["duo1", "duo2", "draw", "bye"] }),
   isBye: boolean("is_bye").notNull().default(false),
   bestOf: integer("best_of").notNull().default(3),
 });
 
-export const matchesRelations = relations(matches, ({ one, many }) => ({
-  round: one(rounds, { fields: [matches.roundId], references: [rounds.id] }),
-  games: many(games),
+export const setsRelations = relations(sets, ({ one, many }) => ({
+  round: one(rounds, { fields: [sets.roundId], references: [rounds.id] }),
+  matches: many(matches),
   ffaParticipants: many(ffaParticipants),
 }));
 
-export const games = pgTable("games", {
+export const matches = pgTable("matches", {
   id: uuid("id").primaryKey().defaultRandom(),
-  matchId: uuid("match_id")
+  setId: uuid("set_id")
     .notNull()
-    .references(() => matches.id),
-  gameNumber: integer("game_number").notNull(),
+    .references(() => sets.id),
+  matchNumber: integer("match_number").notNull(),
   replayUrl: text("replay_url"),
   protocol: text("protocol"),
-  winner: text("winner", { enum: ["team1", "team2", "draw"] }),
-  team1Kos: integer("team1_kos").notNull().default(0),
-  team2Kos: integer("team2_kos").notNull().default(0),
+  winner: text("winner", { enum: ["duo1", "duo2", "draw"] }),
+  duo1Kos: integer("duo1_kos").notNull().default(0),
+  duo2Kos: integer("duo2_kos").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const gamesRelations = relations(games, ({ one }) => ({
-  match: one(matches, { fields: [games.matchId], references: [matches.id] }),
+export const matchesRelations = relations(matches, ({ one }) => ({
+  set: one(sets, { fields: [matches.setId], references: [sets.id] }),
 }));
 
 export const ffaParticipants = pgTable("ffa_participants", {
   id: uuid("id").primaryKey().defaultRandom(),
-  matchId: uuid("match_id")
+  setId: uuid("set_id")
     .notNull()
-    .references(() => matches.id),
-  playerId: uuid("player_id")
+    .references(() => sets.id),
+  trainerId: uuid("trainer_id")
     .notNull()
-    .references(() => players.id),
+    .references(() => trainers.id),
   placement: integer("placement"),
 });
 
 export const ffaParticipantsRelations = relations(ffaParticipants, ({ one }) => ({
-  match: one(matches, { fields: [ffaParticipants.matchId], references: [matches.id] }),
-  player: one(players, { fields: [ffaParticipants.playerId], references: [players.id] }),
+  set: one(sets, { fields: [ffaParticipants.setId], references: [sets.id] }),
+  trainer: one(trainers, { fields: [ffaParticipants.trainerId], references: [trainers.id] }),
 }));

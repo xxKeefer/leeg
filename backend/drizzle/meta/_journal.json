@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1777663817246,
-      "tag": "0000_tense_green_goblin",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1778268335649,
-      "tag": "0001_flippant_ulik",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1778269138569,
-      "tag": "0002_dazzling_harry_osborn",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1778281325486,
-      "tag": "0003_greedy_ultimatum",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1778310713707,
-      "tag": "0004_fluffy_black_bolt",
+      "when": 1778375102038,
+      "tag": "0000_volatile_preak",
       "breakpoints": true
     }
   ]

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTableColumns } from "drizzle-orm";
-import { users, leagues, players, rounds, matches, ffaParticipants } from "./schema.js";
+import { users, leagues, trainers, rounds, sets, ffaParticipants } from "./schema.js";
 
 describe("users schema", () => {
   it("has the expected columns", () => {
@@ -67,24 +67,24 @@ describe("leagues schema", () => {
   });
 });
 
-describe("players schema", () => {
+describe("trainers schema", () => {
   it("has the expected columns", () => {
-    const columns = getTableColumns(players);
+    const columns = getTableColumns(trainers);
     expect(Object.keys(columns).sort()).toEqual(["createdAt", "id", "leagueId", "name", "showdownName"]);
   });
 
   it("name is not null", () => {
-    const columns = getTableColumns(players);
+    const columns = getTableColumns(trainers);
     expect(columns.name.notNull).toBe(true);
   });
 
   it("showdownName is not null", () => {
-    const columns = getTableColumns(players);
+    const columns = getTableColumns(trainers);
     expect(columns.showdownName.notNull).toBe(true);
   });
 
   it("leagueId is not null", () => {
-    const columns = getTableColumns(players);
+    const columns = getTableColumns(trainers);
     expect(columns.leagueId.notNull).toBe(true);
   });
 });
@@ -106,37 +106,37 @@ describe("rounds schema", () => {
   });
 });
 
-describe("matches schema", () => {
+describe("sets schema", () => {
   it("has the expected columns", () => {
-    const columns = getTableColumns(matches);
+    const columns = getTableColumns(sets);
     expect(Object.keys(columns).sort()).toEqual([
       "bestOf",
+      "duo1Trainer1",
+      "duo1Trainer2",
+      "duo2Trainer1",
+      "duo2Trainer2",
       "id",
       "isBye",
-      "matchType",
       "result",
       "roundId",
-      "team1Player1",
-      "team1Player2",
-      "team2Player1",
-      "team2Player2",
+      "setType",
     ]);
   });
 
   it("roundId is not null", () => {
-    const columns = getTableColumns(matches);
+    const columns = getTableColumns(sets);
     expect(columns.roundId.notNull).toBe(true);
   });
 
   it("isBye defaults to false", () => {
-    const columns = getTableColumns(matches);
+    const columns = getTableColumns(sets);
     expect(columns.isBye.notNull).toBe(true);
   });
 
-  it("team player columns are nullable", () => {
-    const columns = getTableColumns(matches);
-    expect(columns.team1Player1.notNull).toBe(false);
-    expect(columns.team2Player1.notNull).toBe(false);
+  it("duo trainer columns are nullable", () => {
+    const columns = getTableColumns(sets);
+    expect(columns.duo1Trainer1.notNull).toBe(false);
+    expect(columns.duo2Trainer1.notNull).toBe(false);
   });
 });
 
@@ -145,9 +145,9 @@ describe("ffaParticipants schema", () => {
     const columns = getTableColumns(ffaParticipants);
     expect(Object.keys(columns).sort()).toEqual([
       "id",
-      "matchId",
       "placement",
-      "playerId",
+      "setId",
+      "trainerId",
     ]);
   });
 
@@ -156,9 +156,9 @@ describe("ffaParticipants schema", () => {
     expect(columns.placement.notNull).toBe(false);
   });
 
-  it("matchId and playerId are required", () => {
+  it("setId and trainerId are required", () => {
     const columns = getTableColumns(ffaParticipants);
-    expect(columns.matchId.notNull).toBe(true);
-    expect(columns.playerId.notNull).toBe(true);
+    expect(columns.setId.notNull).toBe(true);
+    expect(columns.trainerId.notNull).toBe(true);
   });
 });

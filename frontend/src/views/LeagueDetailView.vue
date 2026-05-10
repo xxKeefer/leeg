@@ -3,37 +3,37 @@ import { ref, onMounted, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { apiFetch } from "../api/client";
 
-interface Player {
+interface Trainer {
   id: string;
   name: string;
   showdownName: string;
 }
 
-interface Game {
+interface Match {
   id: string;
-  gameNumber: number;
+  matchNumber: number;
   winner: string | null;
-  team1Kos: number;
-  team2Kos: number;
+  duo1Kos: number;
+  duo2Kos: number;
   replayUrl: string | null;
 }
 
 interface FfaParticipant {
   id: string;
-  playerId: string;
+  trainerId: string;
   placement: number | null;
 }
 
-interface Match {
+interface GameSet {
   id: string;
-  matchType: string;
-  team1Player1: string | null;
-  team1Player2: string | null;
-  team2Player1: string | null;
-  team2Player2: string | null;
+  setType: string;
+  duo1Trainer1: string | null;
+  duo1Trainer2: string | null;
+  duo2Trainer1: string | null;
+  duo2Trainer2: string | null;
   isBye: boolean;
   result: string | null;
-  games: Game[];
+  matches: Match[];
   ffaParticipants?: FfaParticipant[];
 }
 
@@ -42,7 +42,7 @@ interface Round {
   roundNumber: number;
   roundType: string;
   status: string;
-  matches: Match[];
+  sets: GameSet[];
 }
 
 interface League {
@@ -50,12 +50,12 @@ interface League {
   name: string;
   format: string;
   status: string;
-  players: Player[];
+  trainers: Trainer[];
 }
 
 interface StandingEntry {
-  playerId: string;
-  playerName: string;
+  trainerId: string;
+  trainerName: string;
   showdownName: string;
   points: number;
   koDifferential: number;
@@ -71,15 +71,15 @@ const standings = ref<StandingEntry[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 
-const playerName = ref("");
+const trainerName = ref("");
 const showdownName = ref("");
 const enrolling = ref(false);
 const enrollError = ref<string | null>(null);
 const generating = ref(false);
 const generateError = ref<string | null>(null);
 
-const expandedMatch = ref<string | null>(null);
-const gameInputs = ref<Record<string, { winner: string; team1Kos: number; team2Kos: number }>>({});
+const expandedSet = ref<string | null>(null);
+const matchInputs = ref<Record<string, { winner: string; duo1Kos: number; duo2Kos: number }>>({});
 const replayInputs = ref<Record<string, string>>({});
 const replaySubmitting = ref<Record<string, boolean>>({});
 const replayError = ref<Record<string, string>>({});
@@ -88,23 +88,23 @@ const finaleError = ref<string | null>(null);
 const deleting = ref(false);
 const confirmDelete = ref(false);
 const editingMatchup = ref<string | null>(null);
-const matchupInputs = ref<Record<string, { t1p1: string; t1p2: string; t2p1: string; t2p2: string }>>({});
+const matchupInputs = ref<Record<string, { d1t1: string; d1t2: string; d2t1: string; d2t2: string }>>({});
 const placementInputs = ref<Record<string, number>>({});
 const submittingPlacements = ref(false);
 
-function getGameInput(gameId: string) {
-  if (!gameInputs.value[gameId]) {
-    gameInputs.value[gameId] = { winner: "", team1Kos: 0, team2Kos: 0 };
+function getMatchInput(matchId: string) {
+  if (!matchInputs.value[matchId]) {
+    matchInputs.value[matchId] = { winner: "", duo1Kos: 0, duo2Kos: 0 };
   }
-  return gameInputs.value[gameId];
+  return matchInputs.value[matchId];
 }
 
-function onWinnerChange(gameId: string) {
-  const input = getGameInput(gameId);
-  if (input.winner === "team1") {
-    input.team1Kos = 6;
-  } else if (input.winner === "team2") {
-    input.team2Kos = 6;
+function onWinnerChange(matchId: string) {
+  const input = getMatchInput(matchId);
+  if (input.winner === "duo1") {
+    input.duo1Kos = 6;
+  } else if (input.winner === "duo2") {
+    input.duo2Kos = 6;
   }
 }
 
@@ -112,11 +112,11 @@ const isDraft = computed(() => league.value?.status === "draft");
 const isActive = computed(
   () => league.value?.status === "active" || league.value?.status === "finale",
 );
-const playerMap = computed(() => {
+const trainerMap = computed(() => {
   const map = new Map<string, string>();
   if (league.value) {
-    for (const p of league.value.players) {
-      map.set(p.id, p.name);
+    for (const t of league.value.trainers) {
+      map.set(t.id, t.name);
     }
   }
   return map;
@@ -127,19 +127,19 @@ const canGenerateFinale = computed(() => {
   const regularRounds = schedule.value.filter((r) => r.roundType === "regular");
   if (regularRounds.length === 0) return false;
   return regularRounds.every((r) =>
-    r.matches.every((m) => m.isBye || m.result !== null),
+    r.sets.every((s) => s.isBye || s.result !== null),
   );
 });
 
 const isFinale = computed(() => league.value?.status === "finale");
 
-function pName(id: string | null): string {
+function tName(id: string | null): string {
   if (!id) return "";
-  return playerMap.value.get(id) ?? id;
+  return trainerMap.value.get(id) ?? id;
 }
 
-function toggleMatch(matchId: string) {
-  expandedMatch.value = expandedMatch.value === matchId ? null : matchId;
+function toggleSet(setId: string) {
+  expandedSet.value = expandedSet.value === setId ? null : setId;
 }
 
 async function fetchLeague() {
@@ -178,32 +178,32 @@ async function fetchStandings() {
   }
 }
 
-async function enrollPlayer() {
+async function enrollTrainer() {
   enrolling.value = true;
   enrollError.value = null;
   try {
-    const data = await apiFetch<{ player: Player }>(`/leagues/${route.params.id}/players`, {
+    const data = await apiFetch<{ trainer: Trainer }>(`/leagues/${route.params.id}/trainers`, {
       method: "POST",
-      body: JSON.stringify({ name: playerName.value, showdownName: showdownName.value }),
+      body: JSON.stringify({ name: trainerName.value, showdownName: showdownName.value }),
     });
-    league.value?.players.push(data.player);
-    playerName.value = "";
+    league.value?.trainers.push(data.trainer);
+    trainerName.value = "";
     showdownName.value = "";
   } catch (e) {
-    enrollError.value = e instanceof Error ? e.message : "Failed to enroll player";
+    enrollError.value = e instanceof Error ? e.message : "Failed to enroll trainer";
   } finally {
     enrolling.value = false;
   }
 }
 
-async function removePlayer(playerId: string) {
+async function removeTrainer(trainerId: string) {
   try {
-    await apiFetch(`/leagues/${route.params.id}/players/${playerId}`, { method: "DELETE" });
+    await apiFetch(`/leagues/${route.params.id}/trainers/${trainerId}`, { method: "DELETE" });
     if (league.value) {
-      league.value.players = league.value.players.filter((p) => p.id !== playerId);
+      league.value.trainers = league.value.trainers.filter((t) => t.id !== trainerId);
     }
   } catch (e) {
-    enrollError.value = e instanceof Error ? e.message : "Failed to remove player";
+    enrollError.value = e instanceof Error ? e.message : "Failed to remove trainer";
   }
 }
 
@@ -223,34 +223,34 @@ async function generateSchedule() {
   }
 }
 
-async function submitGameResult(gameId: string, winner: string, team1Kos: number, team2Kos: number) {
+async function submitMatchResult(matchId: string, winner: string, duo1Kos: number, duo2Kos: number) {
   try {
-    await apiFetch(`/leagues/${route.params.id}/games/${gameId}`, {
+    await apiFetch(`/leagues/${route.params.id}/matches/${matchId}`, {
       method: "PATCH",
-      body: JSON.stringify({ winner, team1Kos, team2Kos }),
+      body: JSON.stringify({ winner, duo1Kos, duo2Kos }),
     });
     await Promise.all([fetchSchedule(), fetchStandings()]);
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to submit game result";
+    error.value = e instanceof Error ? e.message : "Failed to submit match result";
   }
 }
 
-async function submitReplay(matchId: string, gameId: string, gameNumber: number) {
-  const url = replayInputs.value[gameId];
+async function submitReplay(setId: string, matchId: string, matchNumber: number) {
+  const url = replayInputs.value[matchId];
   if (!url) return;
-  replaySubmitting.value[gameId] = true;
-  replayError.value[gameId] = "";
+  replaySubmitting.value[matchId] = true;
+  replayError.value[matchId] = "";
   try {
-    await apiFetch(`/leagues/${route.params.id}/matches/${matchId}/games`, {
+    await apiFetch(`/leagues/${route.params.id}/sets/${setId}/matches`, {
       method: "POST",
-      body: JSON.stringify({ replayUrl: url, gameNumber }),
+      body: JSON.stringify({ replayUrl: url, matchNumber }),
     });
-    replayInputs.value[gameId] = "";
+    replayInputs.value[matchId] = "";
     await Promise.all([fetchSchedule(), fetchStandings()]);
   } catch (e) {
-    replayError.value[gameId] = e instanceof Error ? e.message : "Failed to submit replay";
+    replayError.value[matchId] = e instanceof Error ? e.message : "Failed to submit replay";
   } finally {
-    replaySubmitting.value[gameId] = false;
+    replaySubmitting.value[matchId] = false;
   }
 }
 
@@ -270,14 +270,14 @@ async function generateFinale() {
   }
 }
 
-async function submitPlacements(matchId: string, participants: FfaParticipant[]) {
+async function submitPlacements(setId: string, participants: FfaParticipant[]) {
   submittingPlacements.value = true;
   try {
     const placements = participants.map((p) => ({
-      playerId: p.playerId,
-      placement: placementInputs.value[p.playerId],
+      trainerId: p.trainerId,
+      placement: placementInputs.value[p.trainerId],
     }));
-    await apiFetch(`/leagues/${route.params.id}/matches/${matchId}/placements`, {
+    await apiFetch(`/leagues/${route.params.id}/sets/${setId}/placements`, {
       method: "PATCH",
       body: JSON.stringify({ placements }),
     });
@@ -292,38 +292,38 @@ async function submitPlacements(matchId: string, participants: FfaParticipant[])
   }
 }
 
-async function overrideMatchResult(matchId: string, result: string) {
+async function overrideSetResult(setId: string, result: string) {
   try {
-    await apiFetch(`/leagues/${route.params.id}/matches/${matchId}`, {
+    await apiFetch(`/leagues/${route.params.id}/sets/${setId}`, {
       method: "PATCH",
       body: JSON.stringify({ result }),
     });
     await Promise.all([fetchSchedule(), fetchStandings()]);
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Failed to override match result";
+    error.value = e instanceof Error ? e.message : "Failed to override set result";
   }
 }
 
-function startEditMatchup(match: Match) {
-  editingMatchup.value = match.id;
-  matchupInputs.value[match.id] = {
-    t1p1: match.team1Player1 ?? "",
-    t1p2: match.team1Player2 ?? "",
-    t2p1: match.team2Player1 ?? "",
-    t2p2: match.team2Player2 ?? "",
+function startEditMatchup(set: GameSet) {
+  editingMatchup.value = set.id;
+  matchupInputs.value[set.id] = {
+    d1t1: set.duo1Trainer1 ?? "",
+    d1t2: set.duo1Trainer2 ?? "",
+    d2t1: set.duo2Trainer1 ?? "",
+    d2t2: set.duo2Trainer2 ?? "",
   };
 }
 
-async function saveMatchup(matchId: string) {
-  const input = matchupInputs.value[matchId];
+async function saveMatchup(setId: string) {
+  const input = matchupInputs.value[setId];
   try {
-    await apiFetch(`/leagues/${route.params.id}/matches/${matchId}`, {
+    await apiFetch(`/leagues/${route.params.id}/sets/${setId}`, {
       method: "PATCH",
       body: JSON.stringify({
-        team1Player1: input.t1p1,
-        team1Player2: input.t1p2,
-        team2Player1: input.t2p1,
-        team2Player2: input.t2p2,
+        duo1Trainer1: input.d1t1,
+        duo1Trainer2: input.d1t2,
+        duo2Trainer1: input.d2t1,
+        duo2Trainer2: input.d2t2,
       }),
     });
     editingMatchup.value = null;
@@ -376,7 +376,7 @@ onMounted(fetchLeague);
         </div>
         <div class="flex gap-2">
           <button
-            v-if="isDraft && league.players.length >= 4"
+            v-if="isDraft && league.trainers.length >= 4"
             :disabled="generating"
             class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
             @click="generateSchedule"
@@ -427,7 +427,7 @@ onMounted(fetchLeague);
           <thead>
             <tr class="bg-gray-100 text-left">
               <th class="p-2 border">#</th>
-              <th class="p-2 border">Player</th>
+              <th class="p-2 border">Trainer</th>
               <th class="p-2 border">Showdown</th>
               <th class="p-2 border text-right">Pts</th>
               <th class="p-2 border text-right">KO Diff</th>
@@ -437,11 +437,11 @@ onMounted(fetchLeague);
           <tbody>
             <tr
               v-for="entry in standings"
-              :key="entry.playerId"
+              :key="entry.trainerId"
               :class="{ 'bg-yellow-50': entry.isFinalist }"
             >
               <td class="p-2 border font-medium">{{ entry.rank }}</td>
-              <td class="p-2 border">{{ entry.playerName }}</td>
+              <td class="p-2 border">{{ entry.trainerName }}</td>
               <td class="p-2 border text-gray-500">{{ entry.showdownName }}</td>
               <td class="p-2 border text-right font-medium">{{ entry.points }}</td>
               <td class="p-2 border text-right" :class="entry.koDifferential > 0 ? 'text-green-600' : entry.koDifferential < 0 ? 'text-red-600' : ''">
@@ -460,33 +460,33 @@ onMounted(fetchLeague);
       <!-- Roster -->
       <section class="mb-8">
         <h2 class="text-lg font-semibold mb-3">
-          Roster ({{ league.players.length }}/16)
+          Roster ({{ league.trainers.length }}/16)
         </h2>
 
-        <div v-if="league.players.length === 0" class="text-gray-500 text-sm mb-4">
-          No players enrolled yet.
+        <div v-if="league.trainers.length === 0" class="text-gray-500 text-sm mb-4">
+          No trainers enrolled yet.
         </div>
 
         <div class="space-y-2 mb-4">
           <div
-            v-for="player in league.players"
-            :key="player.id"
+            v-for="trainer in league.trainers"
+            :key="trainer.id"
             class="flex items-center justify-between p-3 bg-white rounded border"
           >
             <div>
-              <span class="font-medium">{{ player.name }}</span>
+              <span class="font-medium">{{ trainer.name }}</span>
               <button
                 class="ml-3 text-sm text-blue-500 hover:underline"
-                :title="`Copy: ${player.showdownName}`"
-                @click="copyShowdownName(player.showdownName)"
+                :title="`Copy: ${trainer.showdownName}`"
+                @click="copyShowdownName(trainer.showdownName)"
               >
-                {{ player.showdownName }}
+                {{ trainer.showdownName }}
               </button>
             </div>
             <button
               v-if="isDraft"
               class="text-red-500 hover:text-red-700 text-sm"
-              @click="removePlayer(player.id)"
+              @click="removeTrainer(trainer.id)"
             >
               Remove
             </button>
@@ -494,19 +494,19 @@ onMounted(fetchLeague);
         </div>
       </section>
 
-      <!-- Enroll Player Form -->
+      <!-- Enroll Trainer Form -->
       <section v-if="isDraft">
-        <h2 class="text-lg font-semibold mb-3">Enroll Player</h2>
+        <h2 class="text-lg font-semibold mb-3">Enroll Trainer</h2>
 
-        <form class="flex gap-2 items-end" @submit.prevent="enrollPlayer">
+        <form class="flex gap-2 items-end" @submit.prevent="enrollTrainer">
           <div class="flex-1">
-            <label for="player-name" class="block text-sm font-medium mb-1">Name</label>
+            <label for="trainer-name" class="block text-sm font-medium mb-1">Name</label>
             <input
-              id="player-name"
-              v-model="playerName"
+              id="trainer-name"
+              v-model="trainerName"
               type="text"
               required
-              placeholder="Player name"
+              placeholder="Trainer name"
               class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -523,7 +523,7 @@ onMounted(fetchLeague);
           </div>
           <button
             type="submit"
-            :disabled="enrolling || !playerName.trim() || !showdownName.trim()"
+            :disabled="enrolling || !trainerName.trim() || !showdownName.trim()"
             class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
           >
             {{ enrolling ? "..." : "Add" }}
@@ -551,26 +551,26 @@ onMounted(fetchLeague);
 
             <div class="space-y-3">
               <div
-                v-for="match in round.matches"
-                :key="match.id"
+                v-for="set in round.sets"
+                :key="set.id"
                 class="border rounded p-3"
               >
-                <!-- FFA Match Display -->
-                <template v-if="match.matchType === 'ffa' && match.ffaParticipants">
+                <!-- FFA Set Display -->
+                <template v-if="set.setType === 'ffa' && set.ffaParticipants">
                   <div class="text-sm mb-2">
                     <span class="font-medium">Free-for-All:</span>
-                    {{ match.ffaParticipants.map((p: FfaParticipant) => pName(p.playerId)).join(', ') }}
+                    {{ set.ffaParticipants.map((p: FfaParticipant) => tName(p.trainerId)).join(', ') }}
                   </div>
 
                   <!-- Show placements if recorded -->
-                  <div v-if="match.ffaParticipants.some((p: FfaParticipant) => p.placement)" class="space-y-1 text-sm">
+                  <div v-if="set.ffaParticipants.some((p: FfaParticipant) => p.placement)" class="space-y-1 text-sm">
                     <div
-                      v-for="p in [...match.ffaParticipants].sort((a: FfaParticipant, b: FfaParticipant) => (a.placement ?? 99) - (b.placement ?? 99))"
+                      v-for="p in [...set.ffaParticipants].sort((a: FfaParticipant, b: FfaParticipant) => (a.placement ?? 99) - (b.placement ?? 99))"
                       :key="p.id"
                       class="flex items-center gap-2"
                     >
                       <span class="font-medium w-12">{{ p.placement === 1 ? '1st' : p.placement === 2 ? '2nd' : p.placement === 3 ? '3rd' : '4th' }}</span>
-                      <span>{{ pName(p.playerId) }}</span>
+                      <span>{{ tName(p.trainerId) }}</span>
                       <span class="text-gray-400">+{{ p.placement === 1 ? 6 : p.placement === 2 ? 4 : p.placement === 3 ? 2 : 0 }} pts</span>
                     </div>
                   </div>
@@ -578,13 +578,13 @@ onMounted(fetchLeague);
                   <!-- Placement entry form -->
                   <div v-else-if="isFinale" class="space-y-2 mt-2">
                     <div
-                      v-for="p in match.ffaParticipants"
+                      v-for="p in set.ffaParticipants"
                       :key="p.id"
                       class="flex items-center gap-2 text-sm"
                     >
-                      <span class="w-32">{{ pName(p.playerId) }}</span>
+                      <span class="w-32">{{ tName(p.trainerId) }}</span>
                       <select
-                        v-model.number="placementInputs[p.playerId]"
+                        v-model.number="placementInputs[p.trainerId]"
                         class="border rounded px-1 py-0.5"
                       >
                         <option :value="undefined">Place</option>
@@ -596,36 +596,36 @@ onMounted(fetchLeague);
                     </div>
                     <button
                       class="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm disabled:opacity-50"
-                      :disabled="submittingPlacements || match.ffaParticipants.some((p: FfaParticipant) => !placementInputs[p.playerId])"
-                      @click="submitPlacements(match.id, match.ffaParticipants)"
+                      :disabled="submittingPlacements || set.ffaParticipants.some((p: FfaParticipant) => !placementInputs[p.trainerId])"
+                      @click="submitPlacements(set.id, set.ffaParticipants)"
                     >
                       {{ submittingPlacements ? 'Saving...' : 'Record Placements' }}
                     </button>
 
-                    <!-- Replay URL for FFA game -->
-                    <div v-if="match.games?.length" class="pt-2 border-t">
+                    <!-- Replay URL for FFA match -->
+                    <div v-if="set.matches?.length" class="pt-2 border-t">
                       <div
-                        v-for="game in match.games"
-                        :key="game.id"
+                        v-for="match in set.matches"
+                        :key="match.id"
                         class="flex items-center gap-2 text-xs"
                       >
                         <span class="font-medium">FFA Replay:</span>
-                        <template v-if="game.replayUrl">
-                          <a :href="game.replayUrl" target="_blank" class="text-blue-500 hover:underline">View</a>
+                        <template v-if="match.replayUrl">
+                          <a :href="match.replayUrl" target="_blank" class="text-blue-500 hover:underline">View</a>
                         </template>
                         <template v-else>
                           <input
-                            v-model="replayInputs[game.id]"
+                            v-model="replayInputs[match.id]"
                             type="url"
                             placeholder="Paste FFA replay URL..."
                             class="border rounded px-1 py-0.5 flex-1"
                           />
                           <button
                             class="px-2 py-0.5 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
-                            :disabled="!replayInputs[game.id] || replaySubmitting[game.id]"
-                            @click="submitReplay(match.id, game.id, game.gameNumber)"
+                            :disabled="!replayInputs[match.id] || replaySubmitting[match.id]"
+                            @click="submitReplay(set.id, match.id, match.matchNumber)"
                           >
-                            {{ replaySubmitting[game.id] ? '...' : 'Parse' }}
+                            {{ replaySubmitting[match.id] ? '...' : 'Parse' }}
                           </button>
                         </template>
                       </div>
@@ -633,34 +633,34 @@ onMounted(fetchLeague);
                   </div>
                 </template>
 
-                <!-- Regular 2HG Match Display -->
+                <!-- Regular 2HG Set Display -->
                 <template v-else>
                   <!-- Matchup Edit Mode -->
-                  <div v-if="editingMatchup === match.id && !match.isBye" class="space-y-2 text-xs">
+                  <div v-if="editingMatchup === set.id && !set.isBye" class="space-y-2 text-xs">
                     <div class="flex items-center gap-2">
-                      <label class="text-gray-500 w-14">Team 1</label>
-                      <select v-model="matchupInputs[match.id].t1p1" class="border rounded px-1 py-0.5 flex-1">
-                        <option v-for="p in league!.players" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      <label class="text-gray-500 w-14">Duo 1</label>
+                      <select v-model="matchupInputs[set.id].d1t1" class="border rounded px-1 py-0.5 flex-1">
+                        <option v-for="t in league!.trainers" :key="t.id" :value="t.id">{{ t.name }}</option>
                       </select>
                       <span class="text-gray-400">&amp;</span>
-                      <select v-model="matchupInputs[match.id].t1p2" class="border rounded px-1 py-0.5 flex-1">
-                        <option v-for="p in league!.players" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      <select v-model="matchupInputs[set.id].d1t2" class="border rounded px-1 py-0.5 flex-1">
+                        <option v-for="t in league!.trainers" :key="t.id" :value="t.id">{{ t.name }}</option>
                       </select>
                     </div>
                     <div class="flex items-center gap-2">
-                      <label class="text-gray-500 w-14">Team 2</label>
-                      <select v-model="matchupInputs[match.id].t2p1" class="border rounded px-1 py-0.5 flex-1">
-                        <option v-for="p in league!.players" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      <label class="text-gray-500 w-14">Duo 2</label>
+                      <select v-model="matchupInputs[set.id].d2t1" class="border rounded px-1 py-0.5 flex-1">
+                        <option v-for="t in league!.trainers" :key="t.id" :value="t.id">{{ t.name }}</option>
                       </select>
                       <span class="text-gray-400">&amp;</span>
-                      <select v-model="matchupInputs[match.id].t2p2" class="border rounded px-1 py-0.5 flex-1">
-                        <option v-for="p in league!.players" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      <select v-model="matchupInputs[set.id].d2t2" class="border rounded px-1 py-0.5 flex-1">
+                        <option v-for="t in league!.trainers" :key="t.id" :value="t.id">{{ t.name }}</option>
                       </select>
                     </div>
                     <div class="flex gap-2">
                       <button
                         class="px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600"
-                        @click="saveMatchup(match.id)"
+                        @click="saveMatchup(set.id)"
                       >
                         Save
                       </button>
@@ -675,69 +675,69 @@ onMounted(fetchLeague);
 
                   <!-- Matchup Display Mode -->
                   <div v-else class="flex items-center gap-2 text-sm">
-                    <template v-if="match.isBye">
+                    <template v-if="set.isBye">
                       <span class="text-gray-500 italic">
                         BYE:
-                        {{ pName(match.team1Player1) }}
-                        <template v-if="match.team1Player2">
-                          &amp; {{ pName(match.team1Player2) }}
+                        {{ tName(set.duo1Trainer1) }}
+                        <template v-if="set.duo1Trainer2">
+                          &amp; {{ tName(set.duo1Trainer2) }}
                         </template>
                       </span>
                     </template>
                     <template v-else>
                       <span class="font-medium">
-                        {{ pName(match.team1Player1) }} &amp; {{ pName(match.team1Player2) }}
+                        {{ tName(set.duo1Trainer1) }} &amp; {{ tName(set.duo1Trainer2) }}
                       </span>
                       <span class="text-gray-400">vs</span>
                       <span class="font-medium">
-                        {{ pName(match.team2Player1) }} &amp; {{ pName(match.team2Player2) }}
+                        {{ tName(set.duo2Trainer1) }} &amp; {{ tName(set.duo2Trainer2) }}
                       </span>
-                      <span v-if="match.result" class="ml-2 text-xs px-2 py-0.5 rounded" :class="{
-                        'bg-blue-100 text-blue-700': match.result === 'team1' || match.result === 'team2',
-                        'bg-gray-100 text-gray-700': match.result === 'draw',
+                      <span v-if="set.result" class="ml-2 text-xs px-2 py-0.5 rounded" :class="{
+                        'bg-blue-100 text-blue-700': set.result === 'duo1' || set.result === 'duo2',
+                        'bg-gray-100 text-gray-700': set.result === 'draw',
                       }">
-                        {{ match.result === 'team1' ? pName(match.team1Player1) + ' & ' + pName(match.team1Player2) + ' win' : match.result === 'team2' ? pName(match.team2Player1) + ' & ' + pName(match.team2Player2) + ' win' : 'Draw' }}
+                        {{ set.result === 'duo1' ? tName(set.duo1Trainer1) + ' & ' + tName(set.duo1Trainer2) + ' win' : set.result === 'duo2' ? tName(set.duo2Trainer1) + ' & ' + tName(set.duo2Trainer2) + ' win' : 'Draw' }}
                       </span>
                       <button
-                        v-if="isActive && !match.isBye"
+                        v-if="isActive && !set.isBye"
                         class="ml-auto text-xs text-orange-500 hover:underline"
-                        @click="startEditMatchup(match)"
+                        @click="startEditMatchup(set)"
                       >
                         Swap
                       </button>
                       <button
-                        v-if="isActive && !match.isBye"
+                        v-if="isActive && !set.isBye"
                         class="text-xs text-blue-500 hover:underline"
-                        @click="toggleMatch(match.id)"
+                        @click="toggleSet(set.id)"
                       >
-                        {{ expandedMatch === match.id ? "Hide" : "Record" }}
+                        {{ expandedSet === set.id ? "Hide" : "Record" }}
                       </button>
                     </template>
                   </div>
 
-                  <!-- Game Result Entry -->
-                  <div v-if="expandedMatch === match.id && !match.isBye" class="mt-3 space-y-2">
+                  <!-- Match Result Entry -->
+                  <div v-if="expandedSet === set.id && !set.isBye" class="mt-3 space-y-2">
                     <div
-                      v-for="game in (match.games || []).sort((a: Game, b: Game) => a.gameNumber - b.gameNumber)"
-                      :key="game.id"
+                      v-for="match in (set.matches || []).sort((a: Match, b: Match) => a.matchNumber - b.matchNumber)"
+                      :key="match.id"
                       class="text-xs bg-gray-50 p-2 rounded space-y-1"
                     >
                       <div class="flex items-center gap-2">
-                        <span class="font-medium w-16">Game {{ game.gameNumber }}</span>
-                        <template v-if="game.winner">
+                        <span class="font-medium w-16">Match {{ match.matchNumber }}</span>
+                        <template v-if="match.winner">
                           <span class="text-green-600">
-                            {{ game.winner === 'team1' ? 'Team 1' : game.winner === 'team2' ? 'Team 2' : 'Draw' }}
+                            {{ match.winner === 'duo1' ? 'Duo 1' : match.winner === 'duo2' ? 'Duo 2' : 'Draw' }}
                           </span>
-                          <span class="text-gray-400">KOs: {{ game.team1Kos }}-{{ game.team2Kos }}</span>
+                          <span class="text-gray-400">KOs: {{ match.duo1Kos }}-{{ match.duo2Kos }}</span>
                           <a
-                            v-if="game.replayUrl"
-                            :href="game.replayUrl"
+                            v-if="match.replayUrl"
+                            :href="match.replayUrl"
                             target="_blank"
                             class="text-blue-500 hover:underline"
                           >Replay</a>
                           <button
                             class="ml-auto text-blue-500 hover:underline"
-                            @click="submitGameResult(game.id, '', 0, 0).then(() => { /* clear handled by refetch */ })"
+                            @click="submitMatchResult(match.id, '', 0, 0).then(() => { /* clear handled by refetch */ })"
                           >
                             Edit
                           </button>
@@ -747,28 +747,28 @@ onMounted(fetchLeague);
                             <div class="flex items-center gap-2">
                               <label class="text-gray-500 w-14">Winner</label>
                               <select
-                                v-model="getGameInput(game.id).winner"
+                                v-model="getMatchInput(match.id).winner"
                                 class="border rounded px-1 py-0.5"
-                                @change="onWinnerChange(game.id)"
+                                @change="onWinnerChange(match.id)"
                               >
                                 <option value="">--</option>
-                                <option value="team1">Team 1</option>
-                                <option value="team2">Team 2</option>
+                                <option value="duo1">Duo 1</option>
+                                <option value="duo2">Duo 2</option>
                                 <option value="draw">Draw</option>
                               </select>
                             </div>
                             <div class="flex items-center gap-2">
-                              <label class="text-gray-500 w-14">T1 KOs</label>
+                              <label class="text-gray-500 w-14">D1 KOs</label>
                               <input
-                                v-model.number="getGameInput(game.id).team1Kos"
+                                v-model.number="getMatchInput(match.id).duo1Kos"
                                 type="number"
                                 min="0"
                                 max="6"
                                 class="border rounded px-1 py-0.5 w-16"
                               />
-                              <label class="text-gray-500 w-14">T2 KOs</label>
+                              <label class="text-gray-500 w-14">D2 KOs</label>
                               <input
-                                v-model.number="getGameInput(game.id).team2Kos"
+                                v-model.number="getMatchInput(match.id).duo2Kos"
                                 type="number"
                                 min="0"
                                 max="6"
@@ -776,8 +776,8 @@ onMounted(fetchLeague);
                               />
                               <button
                                 class="px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600"
-                                :disabled="!getGameInput(game.id).winner"
-                                @click="submitGameResult(game.id, getGameInput(game.id).winner, getGameInput(game.id).team1Kos, getGameInput(game.id).team2Kos)"
+                                :disabled="!getMatchInput(match.id).winner"
+                                @click="submitMatchResult(match.id, getMatchInput(match.id).winner, getMatchInput(match.id).duo1Kos, getMatchInput(match.id).duo2Kos)"
                               >
                                 Save
                               </button>
@@ -785,30 +785,30 @@ onMounted(fetchLeague);
                           </div>
                         </template>
                       </div>
-                      <div v-if="!game.winner" class="flex items-center gap-2 pt-1">
+                      <div v-if="!match.winner" class="flex items-center gap-2 pt-1">
                         <input
-                          v-model="replayInputs[game.id]"
+                          v-model="replayInputs[match.id]"
                           type="url"
                           placeholder="Paste replay URL..."
                           class="border rounded px-1 py-0.5 flex-1"
                         />
                         <button
                           class="px-2 py-0.5 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
-                          :disabled="!replayInputs[game.id] || replaySubmitting[game.id]"
-                          @click="submitReplay(match.id, game.id, game.gameNumber)"
+                          :disabled="!replayInputs[match.id] || replaySubmitting[match.id]"
+                          @click="submitReplay(set.id, match.id, match.matchNumber)"
                         >
-                          {{ replaySubmitting[game.id] ? '...' : 'Parse' }}
+                          {{ replaySubmitting[match.id] ? '...' : 'Parse' }}
                         </button>
                       </div>
-                      <p v-if="replayError[game.id]" class="text-red-600 text-xs">{{ replayError[game.id] }}</p>
+                      <p v-if="replayError[match.id]" class="text-red-600 text-xs">{{ replayError[match.id] }}</p>
                     </div>
 
                     <!-- Manual Override -->
                     <div class="flex items-center gap-2 text-xs pt-2 border-t">
-                      <span class="font-medium text-gray-500">Override match:</span>
-                      <button class="px-2 py-0.5 rounded border hover:bg-blue-50" @click="overrideMatchResult(match.id, 'team1')">Team 1 Win</button>
-                      <button class="px-2 py-0.5 rounded border hover:bg-blue-50" @click="overrideMatchResult(match.id, 'team2')">Team 2 Win</button>
-                      <button class="px-2 py-0.5 rounded border hover:bg-gray-50" @click="overrideMatchResult(match.id, 'draw')">Draw</button>
+                      <span class="font-medium text-gray-500">Override set:</span>
+                      <button class="px-2 py-0.5 rounded border hover:bg-blue-50" @click="overrideSetResult(set.id, 'duo1')">Duo 1 Win</button>
+                      <button class="px-2 py-0.5 rounded border hover:bg-blue-50" @click="overrideSetResult(set.id, 'duo2')">Duo 2 Win</button>
+                      <button class="px-2 py-0.5 rounded border hover:bg-gray-50" @click="overrideSetResult(set.id, 'draw')">Draw</button>
                     </div>
                   </div>
                 </template>
